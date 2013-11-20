@@ -69,7 +69,7 @@
     "collection.mv"                nil
     "collection.rm"                nil
     "data-object.add"              index-data-object
-    "data-object.cp"               nil
+    "data-object.cp"               index-data-object
     "data-object.metadata.add"     nil
     "data-object.metadata.adda"    nil
     "data-object.metadata.addw"    nil
