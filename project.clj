@@ -9,6 +9,7 @@
                  [clj-time "0.6.0"]
                  [clojurewerkz/elastisch "1.2.0"]
                  [com.novemberain/langohr "1.5.0"]
-                 [org.iplantc/clj-jargon "0.3.1"]]
+                 [org.iplantc/clj-jargon "0.3.1"]
+                 [org.iplantc/clojure-commons "1.4.7"]]
   :repositories {"iplantCollaborative"
                  "http://projects.iplantcollaborative.org/archiva/repository/internal/"})
