@@ -8,6 +8,10 @@
             [clj-jargon.permissions :as r-perm]
             [clojure-commons.file-utils :as file]))
 
+(def ^{:private true :const true} index "data")
+(def ^{:private true :const true} collection "folder")
+(def ^{:private true :const true} data-object "file")
+
 (defn- format-acl-entry
   [acl-entry]
   (letfn [(fmt-perm [perm] (case perm
@@ -31,6 +35,10 @@
     t-conv/from-long
     (t-fmt/unparse (t-fmt/formatters :date-hour-minute-second-ms))))
 
+(defn- get-date-created
+ [irods entity-path]
+ (format-time (r-info/created-date irods entity-path)))
+
 (defn- get-date-modified
   [irods entity-path]
   (format-time (r-info/lastmod-date irods entity-path)))
@@ -42,35 +50,60 @@
                                     :unit      (:unit metadata)})]
     (map fmt-metadata (r-meta/get-metadata irods entity-path))))
 
+(defn- format-collection-doc
+  [irods msg]
+  (let [entity-path (:path msg)]
+    {:id              entity-path
+     :userPermissions (get-data-object-acl irods entity-path)
+     :creator         (:creator msg)
+     :dateCreated     (get-date-created irods entity-path)
+     :dateModified    (get-date-modified irods entity-path)
+     :label           (file/basename entity-path)
+     :metadata        (get-metadata irods entity-path)}))
+
 (defn- format-data-object-doc
   [irods msg]
   (let [entity-path (:path msg)]
     {:id              entity-path
      :userPermissions (get-data-object-acl irods entity-path)
      :creator         (:creator msg)
-     :dateCreated     (format-time (r-info/created-date irods entity-path))
+     :dateCreated     (get-date-created irods entity-path)
      :dateModified    (get-date-modified irods entity-path)
      :label           (file/basename entity-path)
      :fileSize        (:size msg)
      :fileType        (:type msg)
      :metadata        (get-metadata irods entity-path)}))
 
+(defn- index-collection
+  "Index the collection and if the collection isn't root, update the parent collection's
+   dataModified field."
+  [irods msg]
+  (let [entry     (format-collection-doc irods msg)
+        parent-id (file/rm-last-slash (file/dirname (:id entry)))]
+    (es/create index collection entry :id (:entity msg))
+    (when (es/present? index collection parent-id)
+      (es/update-with-script index
+                             collection
+                             parent-id
+                             "ctx._source.dateModified = dateModified"
+                             {:dateModified (:dateCreated entry)}))))
+
 (defn- index-data-object
   "Index the data object and reindex the parent collection with the dataModified field set to the
    data object's dataCreated field"
   [irods msg]
   (let [entry (format-data-object-doc irods msg)]
-    (es/create "data" "file" entry :id (:entity msg))
-    (es/update-with-script "data"
-                           "folder"
-                           (file/dirname (:id entry))
+    (es/create index "file" entry :id (:entity msg))
+    (es/update-with-script index
+                           collection
+                           (file/rm-last-slash (file/dirname (:id entry)))
                            "ctx._source.dateModified = dateModified"
                            {:dateModified (:dateCreated entry)})))
 
 (defn- reindex-data-object
   [irods msg]
-  (es/update-with-script "data"
-                         "file"
+  (es/update-with-script index
+                         data-object
                          (:entity msg)
                          "ctx._source.dateModified = dateModified;
                           ctx._source.fileSize = fileSize;"
@@ -81,7 +114,7 @@
   [routing-key]
   (case routing-key
     "collection.acl.mod"           nil
-    "collection.add"               nil
+    "collection.add"               index-collection
     "collection.metadata.add"      nil
     "collection.metadata.adda"     nil
     "collection.metadata.cp"       nil
