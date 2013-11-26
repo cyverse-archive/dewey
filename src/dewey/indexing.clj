@@ -74,31 +74,28 @@
      :fileType        (:type msg)
      :metadata        (get-metadata irods entity-path)}))
 
+(defn- index-entry
+  [mapping-type entry]
+  (let [parent-id (file/rm-last-slash (file/dirname (:id entry)))]
+    (es/create index mapping-type entry :id (:id entry))
+    (when (es/present? index collection parent-id)
+      (es/update-with-script index
+        collection
+        parent-id
+        "ctx._source.dateModified = dateModified"
+        {:dateModified (:dateCreated entry)}))))
+
 (defn- index-collection
   "Index the collection and if the collection isn't root, update the parent collection's
    dataModified field."
   [irods msg]
-  (let [entry     (format-collection-doc irods msg)
-        parent-id (file/rm-last-slash (file/dirname (:id entry)))]
-    (es/create index collection entry :id (:entity msg))
-    (when (es/present? index collection parent-id)
-      (es/update-with-script index
-                             collection
-                             parent-id
-                             "ctx._source.dateModified = dateModified"
-                             {:dateModified (:dateCreated entry)}))))
+  (index-entry collection (format-collection-doc irods msg)))
 
 (defn- index-data-object
   "Index the data object and reindex the parent collection with the dataModified field set to the
    data object's dataCreated field"
   [irods msg]
-  (let [entry (format-data-object-doc irods msg)]
-    (es/create index "file" entry :id (:entity msg))
-    (es/update-with-script index
-                           collection
-                           (file/rm-last-slash (file/dirname (:id entry)))
-                           "ctx._source.dateModified = dateModified"
-                           {:dateModified (:dateCreated entry)})))
+  (index-entry data-object (format-data-object-doc irods msg)))
 
 (defn- reindex-data-object
   [irods msg]
