@@ -78,30 +78,15 @@
      :fileType        (:type msg)
      :metadata        (get-metadata irods entity-path)}))
 
-(defn- update-date-modified
-  [mapping-type id date-modified]
-  (es/update-with-script index
-                         mapping-type
-                         id
-                         "ctx._source.dateModified = dateModified"
-                         {:dateModified date-modified}))
-
 (defn- index-entry
   [mapping-type entry]
-  (let [parent-id (get-parent-id (:id entry))]
-    (es/create index mapping-type entry :id (:id entry))
-    (when (es/present? index collection parent-id)
-      (update-date-modified mapping-type parent-id (:dateCreated entry)))))
+  (es/create index mapping-type entry :id (:id entry)))
 
 (defn- index-collection
-  "Index the collection and if the collection isn't root, update the parent collection's
-   dataModified field."
   [irods msg]
   (index-entry collection (format-collection-doc irods msg)))
 
 (defn- index-data-object
-  "Index the data object and reindex the parent collection with the dataModified field set to the
-   data object's dataCreated field"
   [irods msg]
   (index-entry data-object (format-data-object-doc irods msg)))
 
@@ -117,11 +102,7 @@
 
 (defn- rm-collection
   [irods msg]
-  (let [parent-id (get-parent-id (:entity msg))]
-    (es/delete index collection (:entity msg))
-    (when (es/present? index collection parent-id)
-      (update-date-modified collection parent-id (get-date-modified irods parent-id)))))
-
+  (es/delete index collection (:entity msg)))
 
 (defn- resolve-consumer
   [routing-key]
