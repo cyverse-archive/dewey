@@ -50,6 +50,10 @@
                                     :unit      (:unit metadata)})]
     (map fmt-metadata (r-meta/get-metadata irods entity-path))))
 
+(defn- get-parent-id
+  [entity-id]
+  (file/rm-last-slash (file/dirname entity-id)))
+
 (defn- format-collection-doc
   [irods msg]
   (let [entity-path (:path msg)]
@@ -74,16 +78,20 @@
      :fileType        (:type msg)
      :metadata        (get-metadata irods entity-path)}))
 
+(defn- update-date-modified
+  [mapping-type id date-modified]
+  (es/update-with-script index
+                         mapping-type
+                         id
+                         "ctx._source.dateModified = dateModified"
+                         {:dateModified date-modified}))
+
 (defn- index-entry
   [mapping-type entry]
-  (let [parent-id (file/rm-last-slash (file/dirname (:id entry)))]
+  (let [parent-id (get-parent-id (:id entry))]
     (es/create index mapping-type entry :id (:id entry))
     (when (es/present? index collection parent-id)
-      (es/update-with-script index
-        collection
-        parent-id
-        "ctx._source.dateModified = dateModified"
-        {:dateModified (:dateCreated entry)}))))
+      (update-date-modified mapping-type parent-id (:dateCreated entry)))))
 
 (defn- index-collection
   "Index the collection and if the collection isn't root, update the parent collection's
@@ -107,6 +115,14 @@
                          {:dateModified (get-date-modified irods (:entity msg))
                           :fileSize     (:size msg)}))
 
+(defn- rm-collection
+  [irods msg]
+  (let [parent-id (get-parent-id (:entity msg))]
+    (es/delete index collection (:entity msg))
+    (when (es/present? index collection parent-id)
+      (update-date-modified collection parent-id (get-date-modified irods parent-id)))))
+
+
 (defn- resolve-consumer
   [routing-key]
   (case routing-key
@@ -120,7 +136,8 @@
     "collection.metadata.rmw"      nil
     "collection.metadata.set"      nil
     "collection.mv"                nil
-    "collection.rm"                nil
+    "collection.rm"                rm-collection
+    "data-object.acl.mod"          nil
     "data-object.add"              index-data-object
     "data-object.cp"               index-data-object
     "data-object.metadata.add"     nil
