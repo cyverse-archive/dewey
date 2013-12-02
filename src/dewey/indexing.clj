@@ -48,6 +48,7 @@
 
 (defn- get-date-created
  [irods entity-path]
+ (println (r-info/created-date irods entity-path))
  (format-time (r-info/created-date irods entity-path)))
 
 (defn- get-date-modified
@@ -99,9 +100,14 @@
     (when (es/present? index collection parent-id)
       (es/update-with-script index
                              collection
-                             entity-path
+                             parent-id
                              "ctx._source.dateModified = dateModified;"
                              {:dateModified (get-date-modified irods parent-id)}))))
+
+(defn- remove-folder-entry
+  [entity-path]
+  (when (es/present? index collection entity-path)
+    (es/delete index collection entity-path)))
 
 (defn- index-entry
   [mapping-type entry]
@@ -129,14 +135,17 @@
 
 (defn- rename-collection
   [irods msg]
-  (let [new-path (:new-path msg)]
-    (es/delete index collection (:entity msg))
+  (let [old-path (:entity msg)
+        new-path (:new-path msg)]
+    (remove-folder-entry old-path)
     (index-entry collection (format-collection-doc irods new-path))
-    (update-parent-modify-time irods new-path)))
+    (update-parent-modify-time irods old-path)
+    (when-not (= (get-parent-id old-path) (get-parent-id new-path))
+      (update-parent-modify-time irods new-path))))
 
 (defn- rm-collection
   [irods msg]
-  (es/delete index collection (:entity msg))
+  (remove-folder-entry (:entity msg))
   (update-parent-modify-time irods (:entity msg)))
 
 (defn- resolve-consumer
