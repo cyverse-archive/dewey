@@ -12,6 +12,10 @@
 (def ^{:private true :const true} collection "folder")
 (def ^{:private true :const true} data-object "file")
 
+(defn- format-user
+  ([user] (format-user (:name user) (:zone user)))
+  ([name zone] {:username name :zone zone}))
+
 (defn- format-acl-entry
   [acl-entry]
   (letfn [(fmt-perm [perm] (condp = perm
@@ -20,8 +24,7 @@
                              r-perm/read-perm  :read
                                                nil))]
     {:permission (fmt-perm (.getFilePermissionEnum acl-entry))
-     :user       {:username (.getUserName acl-entry)
-                  :zone     (.getUserZone acl-entry)}}))
+     :user       (format-user (.getUserName acl-entry) (.getUserZone acl-entry))}))
 
 (defn- format-time
   [posix-time-str]
@@ -43,8 +46,12 @@
 (defn- get-collection-creator
   [irods path]
   (let [coll (r-info/collection irods path)]
-    {:username (.getCollectionOwnerName coll)
-     :zone     (.getCollectionOwnerZone coll)}))
+    (format-user (.getCollectionOwnerName coll) (.getCollectionOwnerZone coll))))
+
+(defn- get-data-object-creator
+  [irods path]
+  (let [obj (r-info/data-object irods path)]
+    (format-user (.getDataOwnerName obj) (.getDataOwnerZone obj))))
 
 (defn- get-date-created
  [irods entity-path]
@@ -82,17 +89,21 @@
    :metadata        metadata})
 
 (defn- format-data-object-doc
-  [irods msg]
-  (let [entity-path (:path msg)]
-    {:id              entity-path
-     :userPermissions (get-data-object-acl irods entity-path)
-     :creator         (:creator msg)
-     :dateCreated     (get-date-created irods entity-path)
-     :dateModified    (get-date-modified irods entity-path)
-     :label           (file/basename entity-path)
-     :fileSize        (:size msg)
-     :fileType        (:type msg)
-     :metadata        (get-metadata irods entity-path)}))
+  [irods path size type & {:keys [permissions creator date-created date-modified metadata]
+                      :or   {permissions   (get-data-object-acl irods path)
+                             creator       (get-data-object-creator irods path)
+                             date-created  (get-date-created irods path)
+                             date-modified (get-date-modified irods path)
+                             metadata      (get-metadata irods path)}}]
+  {:id              path
+   :label           (file/basename path)
+   :userPermissions permissions
+   :creator         creator
+   :dateCreated     date-created
+   :dateModified    date-modified
+   :metadata        metadata
+   :fileSize        size
+   :fileType        type})
 
 (defn- update-parent-modify-time
   [irods entity-path]
@@ -120,18 +131,22 @@
 
 (defn- index-data-object
   [irods msg]
-  (index-entry data-object (format-data-object-doc irods msg))
+  (index-entry data-object (format-data-object-doc irods (:entity msg) (:size msg) (:type msg)
+                             :creator (format-user (:creator msg))))
   (update-parent-modify-time irods (:entity msg)))
 
 (defn- reindex-data-object
   [irods msg]
-  (es/update-with-script index
-                         data-object
-                         (:entity msg)
-                         "ctx._source.dateModified = dateModified;
-                          ctx._source.fileSize = fileSize;"
-                         {:dateModified (get-date-modified irods (:entity msg))
-                          :fileSize     (:size msg)}))
+  (let [path (:entity msg)]
+    (if (es/present? index data-object path)
+      (es/update-with-script index
+                             data-object
+                             path
+                             "ctx._source.dateModified = dateModified;
+                              ctx._source.fileSize = fileSize;"
+                             {:dateModified (get-date-modified irods path)
+                              :fileSize     (:size msg)})
+      (index-entry data-object (format-data-object-doc irods path (:size msg) (:type msg))))))
 
 (defn- rename-collection
   [irods msg]
