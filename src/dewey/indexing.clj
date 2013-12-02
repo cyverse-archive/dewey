@@ -74,34 +74,24 @@
   (file/rm-last-slash (file/dirname entity-id)))
 
 (defn- format-collection-doc
-  [irods path & {:keys [permissions creator date-created date-modified metadata]
-                 :or   {permissions   (get-collection-acl irods path)
-                        creator       (get-collection-creator irods path)
-                        date-created  (get-date-created irods path)
-                        date-modified (get-date-modified irods path)
-                        metadata      (get-metadata irods path)}}]
+  [irods path & {:keys [permissions creator date-created date-modified metadata]}]
   {:id              path
    :label           (file/basename path)
-   :userPermissions permissions
-   :creator         creator
-   :dateCreated     date-created
-   :dateModified    date-modified
-   :metadata        metadata})
+   :userPermissions (or permissions (get-collection-acl irods path))
+   :creator         (or creator (get-collection-creator irods path))
+   :dateCreated     (or date-created (get-date-created irods path))
+   :dateModified    (or date-modified (get-date-modified irods path))
+   :metadata        (or metadata (get-metadata irods path))})
 
 (defn- format-data-object-doc
-  [irods path size type & {:keys [permissions creator date-created date-modified metadata]
-                      :or   {permissions   (get-data-object-acl irods path)
-                             creator       (get-data-object-creator irods path)
-                             date-created  (get-date-created irods path)
-                             date-modified (get-date-modified irods path)
-                             metadata      (get-metadata irods path)}}]
+  [irods path size type & {:keys [permissions creator date-created date-modified metadata]}]
   {:id              path
    :label           (file/basename path)
-   :userPermissions permissions
-   :creator         creator
-   :dateCreated     date-created
-   :dateModified    date-modified
-   :metadata        metadata
+   :userPermissions (or permissions (get-data-object-acl irods path))
+   :creator         (or creator (get-data-object-creator irods path))
+   :dateCreated     (or date-created (get-date-created irods path))
+   :dateModified    (or date-modified (get-date-modified irods path))
+   :metadata        (or metadata (get-metadata irods path))
    :fileSize        size
    :fileType        type})
 
