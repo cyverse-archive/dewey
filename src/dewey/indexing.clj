@@ -53,9 +53,12 @@
   (let [obj (r-info/data-object irods path)]
     (format-user (.getDataOwnerName obj) (.getDataOwnerZone obj))))
 
+(defn- get-data-object-type
+  [irods path]
+  (.getDataTypeName (r-info/data-object irods path)))
+
 (defn- get-date-created
  [irods entity-path]
- (println (r-info/created-date irods entity-path))
  (format-time (r-info/created-date irods entity-path)))
 
 (defn- get-date-modified
@@ -84,7 +87,8 @@
    :metadata        (or metadata (get-metadata irods path))})
 
 (defn- format-data-object-doc
-  [irods path size type & {:keys [permissions creator date-created date-modified metadata]}]
+  [irods path
+   & {:keys [permissions creator date-created date-modified metadata file-size file-type]}]
   {:id              path
    :label           (file/basename path)
    :userPermissions (or permissions (get-data-object-acl irods path))
@@ -92,8 +96,8 @@
    :dateCreated     (or date-created (get-date-created irods path))
    :dateModified    (or date-modified (get-date-modified irods path))
    :metadata        (or metadata (get-metadata irods path))
-   :fileSize        size
-   :fileType        type})
+   :fileSize        (or file-size (r-info/file-size irods path))
+   :fileType        (or file-type (get-data-object-type irods path))})
 
 (defn- update-parent-modify-time
   [irods entity-path]
@@ -105,14 +109,22 @@
                              "ctx._source.dateModified = dateModified;"
                              {:dateModified (get-date-modified irods parent-id)}))))
 
-(defn- remove-folder-entry
-  [entity-path]
-  (when (es/present? index collection entity-path)
-    (es/delete index collection entity-path)))
-
 (defn- index-entry
   [mapping-type entry]
   (es/create index mapping-type entry :id (:id entry)))
+
+(defn- remove-entry
+  [mapping-type id]
+  (when (es/present? index mapping-type id)
+    (es/delete index mapping-type id)))
+
+(defn- rename-entry
+  [irods mapping-type old-path new-doc]
+  (remove-entry mapping-type old-path)
+  (index-entry mapping-type new-doc)
+  (update-parent-modify-time irods old-path)
+  (when-not (= (get-parent-id old-path) (get-parent-id (:id new-doc)))
+    (update-parent-modify-time irods (:id new-doc))))
 
 (defn- index-collection
   [irods msg]
@@ -121,9 +133,12 @@
 
 (defn- index-data-object
   [irods msg]
-  (index-entry data-object (format-data-object-doc irods (:entity msg) (:size msg) (:type msg)
-                             :creator (format-user (:creator msg))))
-  (update-parent-modify-time irods (:entity msg)))
+  (let [doc (format-data-object-doc irods (:entity msg)
+              :creator   (format-user (:creator msg))
+              :file-size (:size msg)
+              :file-type (:type msg))]
+    (index-entry data-object doc)
+    (update-parent-modify-time irods (:entity msg))))
 
 (defn- reindex-data-object
   [irods msg]
@@ -136,21 +151,22 @@
                               ctx._source.fileSize = fileSize;"
                              {:dateModified (get-date-modified irods path)
                               :fileSize     (:size msg)})
-      (index-entry data-object (format-data-object-doc irods path (:size msg) (:type msg))))))
+      (index-entry data-object
+                   (format-data-object-doc irods path
+                     :file-size (:size msg)
+                     :file-type (:type msg))))))
 
 (defn- rename-collection
   [irods msg]
-  (let [old-path (:entity msg)
-        new-path (:new-path msg)]
-    (remove-folder-entry old-path)
-    (index-entry collection (format-collection-doc irods new-path))
-    (update-parent-modify-time irods old-path)
-    (when-not (= (get-parent-id old-path) (get-parent-id new-path))
-      (update-parent-modify-time irods new-path))))
+  (rename-entry irods collection (:entity msg) (format-collection-doc irods (:new-path msg))))
+
+(defn- rename-data-object
+  [irods msg]
+  (rename-entry irods data-object (:entity msg) (format-data-object-doc irods (:new-path msg))))
 
 (defn- rm-collection
   [irods msg]
-  (remove-folder-entry (:entity msg))
+  (remove-entry collection (:entity msg))
   (update-parent-modify-time irods (:entity msg)))
 
 (defn- resolve-consumer
@@ -179,7 +195,7 @@
     "data-object.metadata.rmw"     nil
     "data-object.metadata.set"     nil
     "data-object.mod"              reindex-data-object
-    "data-object.mv"               nil
+    "data-object.mv"               rename-data-object
     "data-object.rm"               nil
     "data-object.sys-metadata.mod" nil
     "zone.mv"                      nil
