@@ -169,6 +169,11 @@
   (remove-entry collection (:entity msg))
   (update-parent-modify-time irods (:entity msg)))
 
+(defn- rm-data-object
+  [irods msg]
+  (remove-entry data-object (:entity msg))
+  (update-parent-modify-time irods (:entity msg)))
+
 (defn- resolve-consumer
   [routing-key]
   (case routing-key
@@ -181,8 +186,8 @@
     "collection.metadata.rm"       nil
     "collection.metadata.rmw"      nil
     "collection.metadata.set"      nil
-    "collection.mv"                rename-collection
-    "collection.rm"                rm-collection
+    "collection.mv"                rename-collection  ; TODO Make this recursive
+    "collection.rm"                rm-collection      ; TODO Make this recursive
     "data-object.acl.mod"          nil
     "data-object.add"              index-data-object
     "data-object.cp"               index-data-object
@@ -196,7 +201,7 @@
     "data-object.metadata.set"     nil
     "data-object.mod"              reindex-data-object
     "data-object.mv"               rename-data-object
-    "data-object.rm"               nil
+    "data-object.rm"               rm-data-object
     "data-object.sys-metadata.mod" nil
     "zone.mv"                      nil
                                    nil))
