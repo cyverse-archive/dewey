@@ -214,6 +214,18 @@
   (remove-entry data-object (:entity msg))
   (update-parent-modify-time irods (:entity msg)))
 
+(defn- update-data-object-acl
+  [irods msg]
+  (let [path (:entity msg)
+        perm (:permission msg)]
+    (if (es-doc/present? index data-object path)
+      (es-doc/update-with-script index
+                                 data-object
+                                 path
+                                 "ctx._source.permissions = permissions"
+                                 {:permissions (get-data-object-acl irods path)})
+      (index-entry data-object (format-data-object-doc irods path)))))
+
 (defn- resolve-consumer
   [routing-key]
   (case routing-key
@@ -228,7 +240,7 @@
     "collection.metadata.set"      nil
     "collection.mv"                rename-collection
     "collection.rm"                rm-collection
-    "data-object.acl.mod"          nil
+    "data-object.acl.mod"          update-data-object-acl
     "data-object.add"              index-data-object
     "data-object.cp"               index-data-object
     "data-object.metadata.add"     nil
