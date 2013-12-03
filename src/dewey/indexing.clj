@@ -137,12 +137,13 @@
 (defn- update-parent-modify-time
   [irods entity-path]
   (let [parent-id (get-parent-id entity-path)]
-    (when (es-doc/present? index collection parent-id)
+    (if (es-doc/present? index collection parent-id)
       (es-doc/update-with-script index
                                  collection
                                  parent-id
                                  "ctx._source.dateModified = dateModified;"
-                                 {:dateModified (get-date-modified irods parent-id)}))))
+                                 {:dateModified (get-date-modified irods parent-id)})
+      (index-entry collection (format-collection-doc irods parent-id)))))
 
 (defn- rename-entry
   [irods mapping-type old-path new-doc]
