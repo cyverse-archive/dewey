@@ -1,9 +1,11 @@
 (ns dewey.indexing
   (:require [clj-time.coerce :as t-conv]
             [clj-time.format :as t-fmt]
-            [clojurewerkz.elastisch.rest.document :as es]
+            [clojurewerkz.elastisch.query :as es-query]
+            [clojurewerkz.elastisch.rest.document :as es-doc]
             [clj-jargon.init :as r-init]
             [clj-jargon.item-info :as r-info]
+            [clj-jargon.lazy-listings :as r-lazy]
             [clj-jargon.metadata :as r-meta]
             [clj-jargon.permissions :as r-perm]
             [clojure-commons.file-utils :as file]))
@@ -22,11 +24,20 @@
                              r-perm/own-perm   :own
                              r-perm/write-perm :write
                              r-perm/read-perm  :read
-                                               nil))]
+                             nil))]
     {:permission (fmt-perm (.getFilePermissionEnum acl-entry))
      :user       (format-user (.getUserName acl-entry) (.getUserZone acl-entry))}))
 
+(defn- format-acl
+  [acl]
+  (remove (comp nil? :permission) (map format-acl-entry acl)))
+
 (defn- format-time
+  [posix-time]
+  (t-fmt/unparse (t-fmt/formatters :date-hour-minute-second-ms)
+                 (t-conv/from-date posix-time)))
+
+(defn- format-time-str
   [posix-time-str]
   (->> posix-time-str
     Long/parseLong
@@ -35,13 +46,11 @@
 
 (defn- get-collection-acl
   [irods path]
-  (let [acl (.listPermissionsForCollection (:collectionAO irods) path)]
-    (remove (comp nil? :permission) (map format-acl-entry acl))))
+  (format-acl (.listPermissionsForCollection (:collectionAO irods) path)))
 
 (defn- get-data-object-acl
   [irods path]
-  (let [acl (.listPermissionsForDataObject (:dataObjectAO irods) path)]
-    (remove (comp nil? :permission) (map format-acl-entry acl))))
+  (format-acl (.listPermissionsForDataObject (:dataObjectAO irods) path)))
 
 (defn- get-collection-creator
   [irods path]
@@ -58,12 +67,12 @@
   (.getDataTypeName (r-info/data-object irods path)))
 
 (defn- get-date-created
- [irods entity-path]
- (format-time (r-info/created-date irods entity-path)))
+  [irods entity-path]
+  (format-time-str (r-info/created-date irods entity-path)))
 
 (defn- get-date-modified
   [irods entity-path]
-  (format-time (r-info/lastmod-date irods entity-path)))
+  (format-time-str (r-info/lastmod-date irods entity-path)))
 
 (defn- get-metadata
   [irods entity-path]
@@ -71,10 +80,6 @@
                                     :value     (:value metadata)
                                     :unit      (:unit metadata)})]
     (map fmt-metadata (r-meta/get-metadata irods entity-path))))
-
-(defn- get-parent-id
-  [entity-id]
-  (file/rm-last-slash (file/dirname entity-id)))
 
 (defn- format-collection-doc
   [irods path & {:keys [permissions creator date-created date-modified metadata]}]
@@ -99,24 +104,45 @@
    :fileSize        (or file-size (r-info/file-size irods path))
    :fileType        (or file-type (get-data-object-type irods path))})
 
-(defn- update-parent-modify-time
-  [irods entity-path]
-  (let [parent-id (get-parent-id entity-path)]
-    (when (es/present? index collection parent-id)
-      (es/update-with-script index
-                             collection
-                             parent-id
-                             "ctx._source.dateModified = dateModified;"
-                             {:dateModified (get-date-modified irods parent-id)}))))
+(defn- format-coll-doc-from-irods-entry
+  [irods entry]
+  (format-collection-doc irods (.getFormattedAbsolutePath entry)
+    :permissions  (format-acl (.getUserFilePermission entry))
+    :creator      (format-user (.getOwnerName entry) (.getOwnerZone entry))
+    :dateCreated  (format-time (.getCreatedAt entry))
+    :dateModified (format-time (.getModifiedAt entry))))
+
+(defn- format-data-obj-doc-from-irods-entry
+  [irods entry]
+  (format-data-object-doc irods (.getFormattedAbsolutePath entry)
+    :permissions   (format-acl (.getUserFilePermission entry))
+    :creator       (format-user (.getOwnerName entry) (.getOwnerZone entry))
+    :date-created  (format-time (.getCreatedAt entry))
+    :date-modified (format-time (.getModifiedAt entry))
+    :file-size     (.getDataSize entry)))
+
+(defn- get-parent-id
+  [entity-id]
+  (file/rm-last-slash (file/dirname entity-id)))
 
 (defn- index-entry
   [mapping-type entry]
-  (es/create index mapping-type entry :id (:id entry)))
+  (es-doc/create index mapping-type entry :id (:id entry)))
 
 (defn- remove-entry
   [mapping-type id]
-  (when (es/present? index mapping-type id)
-    (es/delete index mapping-type id)))
+  (when (es-doc/present? index mapping-type id)
+    (es-doc/delete index mapping-type id)))
+
+(defn- update-parent-modify-time
+  [irods entity-path]
+  (let [parent-id (get-parent-id entity-path)]
+    (when (es-doc/present? index collection parent-id)
+      (es-doc/update-with-script index
+                                 collection
+                                 parent-id
+                                 "ctx._source.dateModified = dateModified;"
+                                 {:dateModified (get-date-modified irods parent-id)}))))
 
 (defn- rename-entry
   [irods mapping-type old-path new-doc]
@@ -125,6 +151,16 @@
   (update-parent-modify-time irods old-path)
   (when-not (= (get-parent-id old-path) (get-parent-id (:id new-doc)))
     (update-parent-modify-time irods (:id new-doc))))
+
+(defn- index-members
+  [irods parent-path]
+  (letfn [(idx-obj  [obj]
+                    (index-entry data-object (format-data-obj-doc-from-irods-entry irods obj)))
+          (idx-coll [coll]
+                    (index-entry collection (format-coll-doc-from-irods-entry irods coll))
+                    (index-members irods (.getFormattedAbsolutePath coll)))]
+    (doall (map idx-obj (r-lazy/list-files-in irods parent-path)))
+    (doall (map idx-coll (r-lazy/list-subdirs-in irods parent-path)))))
 
 (defn- index-collection
   [irods msg]
@@ -143,14 +179,14 @@
 (defn- reindex-data-object
   [irods msg]
   (let [path (:entity msg)]
-    (if (es/present? index data-object path)
-      (es/update-with-script index
-                             data-object
-                             path
-                             "ctx._source.dateModified = dateModified;
-                              ctx._source.fileSize = fileSize;"
-                             {:dateModified (get-date-modified irods path)
-                              :fileSize     (:size msg)})
+    (if (es-doc/present? index data-object path)
+      (es-doc/update-with-script index
+                                 data-object
+                                 path
+                                 "ctx._source.dateModified = dateModified;
+                                  ctx._source.fileSize = fileSize;"
+                                 {:dateModified (get-date-modified irods path)
+                                  :fileSize     (:size msg)})
       (index-entry data-object
                    (format-data-object-doc irods path
                      :file-size (:size msg)
@@ -158,7 +194,11 @@
 
 (defn- rename-collection
   [irods msg]
-  (rename-entry irods collection (:entity msg) (format-collection-doc irods (:new-path msg))))
+  (let [old-path (:entity msg)
+        new-path (:new-path msg)]
+    (rename-entry irods collection old-path (format-collection-doc irods new-path))
+    (es-doc/delete-by-query-across-all-types index (es-query/wildcard :id (str old-path "/*")))
+    (index-members irods new-path)))
 
 (defn- rename-data-object
   [irods msg]
@@ -186,8 +226,8 @@
     "collection.metadata.rm"       nil
     "collection.metadata.rmw"      nil
     "collection.metadata.set"      nil
-    "collection.mv"                rename-collection  ; TODO Make this recursive
-    "collection.rm"                rm-collection      ; TODO Make this recursive
+    "collection.mv"                rename-collection
+    "collection.rm"                rm-collection
     "data-object.acl.mod"          nil
     "data-object.add"              index-data-object
     "data-object.cp"               index-data-object
@@ -208,6 +248,10 @@
 
 (defn consume-msg
   [irods-cfg routing-key msg]
-  (when-let [consume (resolve-consumer routing-key)]
-    (r-init/with-jargon irods-cfg [irods]
-      (consume irods msg))))
+  (try
+    (when-let [consume (resolve-consumer routing-key)]
+      (r-init/with-jargon irods-cfg [irods]
+        (consume irods msg)))
+    (catch Throwable e
+      (.printStackTrace e)
+      (System/exit -1))))
