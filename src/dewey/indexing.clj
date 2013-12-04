@@ -153,22 +153,70 @@
   (when-not (= (get-parent-id old-path) (get-parent-id (:id new-doc)))
     (update-parent-modify-time irods (:id new-doc))))
 
-(defn- index-members
-  [irods parent-path]
-  (letfn [(idx-obj  [obj]
-                    (index-entry data-object (format-data-obj-doc-from-irods-entry irods obj)))
-          (idx-coll [coll]
-                    (index-entry collection (format-coll-doc-from-irods-entry irods coll))
-                    (index-members irods (.getFormattedAbsolutePath coll)))]
-    (doall (map idx-obj (r-lazy/list-files-in irods parent-path)))
-    (doall (map idx-coll (r-lazy/list-subdirs-in irods parent-path)))))
+(defn- crawl-collection
+  [irods coll-path coll-op obj-op]
+  (letfn [(rec-coll-op [coll]
+            (coll-op irods coll)
+            (crawl-collection irods (.getFormattedAbsolutePath coll) coll-op obj-op))]
+    (doall (map (partial obj-op irods) (r-lazy/list-files-in irods coll-path)))
+    (doall (map rec-coll-op (r-lazy/list-subdirs-in irods coll-path)))))
 
-(defn- index-collection
+(defn- update-acl
+  [irods mapping-type acl-retriever formatter entry-id]
+  (if (es-doc/present? index mapping-type entry-id)
+    (es-doc/update-with-script index
+                               mapping-type
+                               entry-id
+                               "ctx._source.userPermissions = permissions"
+                               {:permissions (acl-retriever irods entry-id)})
+    (index-entry mapping-type (formatter irods entry-id))))
+
+(defn- update-collection-acl
+  "Updates a collection's indexed ACL. This version retrieves the ACL from iRODS.
+
+   Parameters:
+     irods - The iRODS context map
+     coll-id - The id of the collection in the index."
+  [irods coll-id]
+  (update-acl irods collection get-collection-acl format-collection-doc coll-id))
+
+(defn- update-collection-acl-irods
+  [irods coll]
+  (let [id (.getFormattedAbsolutePath coll)]
+  (if (es-doc/present? index collection id)
+    (es-doc/update-with-script index
+                               collection
+                               id
+                               "ctx._source.userPermissions = permissions"
+                               {:permissions (format-acl (.getUserFilePermission coll))})
+    (index-entry collection (format-coll-doc-from-irods-entry irods coll)))))
+
+  (defn- update-data-obj-acl
+  "Updates a data object's indexed ACL. This version retrieves the ACL from iRODS.
+
+   Parameters:
+     irods - The iRODS context map
+     obj-id - The id of the data object in the index."
+  [irods obj-id]
+  (update-acl irods data-object get-data-object-acl format-data-object-doc obj-id))
+
+(defn- update-data-object-acl-irods
+  [irods obj]
+  (let [id (.getFormattedAbsolutePath obj)]
+    (if (es-doc/present? index data-object id)
+      (es-doc/update-with-script index
+                                 data-object
+                                 id
+                                 "ctx._source.userPermissions = permissions"
+                                 {:permissions (format-acl (.getUserFilePermission obj))})
+      (index-entry data-object (format-data-obj-doc-from-irods-entry irods obj)))))
+
+(defn- index-collection-handler
   [irods msg]
   (index-entry collection (format-collection-doc irods (:entity msg)))
   (update-parent-modify-time irods (:entity msg)))
 
-(defn- index-data-object
+(defn- index-data-object-handler
   [irods msg]
   (let [doc (format-data-object-doc irods (:entity msg)
               :creator   (format-user (:creator msg))
@@ -177,7 +225,7 @@
     (index-entry data-object doc)
     (update-parent-modify-time irods (:entity msg))))
 
-(defn- reindex-data-object
+(defn- reindex-data-object-handler
   [irods msg]
   (let [path (:entity msg)]
     (if (es-doc/present? index data-object path)
@@ -193,45 +241,50 @@
                      :file-size (:size msg)
                      :file-type (:type msg))))))
 
-(defn- rename-collection
+(defn- rename-collection-handler
   [irods msg]
   (let [old-path (:entity msg)
         new-path (:new-path msg)]
     (rename-entry irods collection old-path (format-collection-doc irods new-path))
     (es-doc/delete-by-query-across-all-types index (es-query/wildcard :id (str old-path "/*")))
-    (index-members irods new-path)))
+    (crawl-collection irods
+                      new-path
+                      (partial index-entry collection format-coll-doc-from-irods-entry)
+                      (partial index-entry data-object format-data-obj-doc-from-irods-entry))))
 
-(defn- rename-data-object
+(defn- rename-data-object-handler
   [irods msg]
   (rename-entry irods data-object (:entity msg) (format-data-object-doc irods (:new-path msg))))
 
-(defn- rm-collection
+(defn- rm-collection-handler
   [irods msg]
   (remove-entry collection (:entity msg))
   (update-parent-modify-time irods (:entity msg)))
 
-(defn- rm-data-object
+(defn- rm-data-object-handler
   [irods msg]
   (remove-entry data-object (:entity msg))
   (update-parent-modify-time irods (:entity msg)))
 
-(defn- update-data-object-acl
+(defn- update-collection-acl-handler
   [irods msg]
-  (let [path (:entity msg)
-        perm (:permission msg)]
-    (if (es-doc/present? index data-object path)
-      (es-doc/update-with-script index
-                                 data-object
-                                 path
-                                 "ctx._source.permissions = permissions"
-                                 {:permissions (get-data-object-acl irods path)})
-      (index-entry data-object (format-data-object-doc irods path)))))
+  (when (contains? msg :permission)
+    (update-collection-acl irods (:entity msg))
+    (when (:recursive msg)
+      (crawl-collection irods
+                        (:entity msg)
+                        update-collection-acl-irods
+                        update-data-object-acl-irods))))
+
+(defn- update-data-object-acl-handler
+  [irods msg]
+  (update-data-obj-acl irods (:entity msg)))
 
 (defn- resolve-consumer
   [routing-key]
   (case routing-key
-    "collection.acl.mod"           nil
-    "collection.add"               index-collection
+    "collection.acl.mod"           update-collection-acl-handler
+    "collection.add"               index-collection-handler
     "collection.metadata.add"      nil
     "collection.metadata.adda"     nil
     "collection.metadata.cp"       nil
@@ -239,11 +292,11 @@
     "collection.metadata.rm"       nil
     "collection.metadata.rmw"      nil
     "collection.metadata.set"      nil
-    "collection.mv"                rename-collection
-    "collection.rm"                rm-collection
-    "data-object.acl.mod"          update-data-object-acl
-    "data-object.add"              index-data-object
-    "data-object.cp"               index-data-object
+    "collection.mv"                rename-collection-handler
+    "collection.rm"                rm-collection-handler
+    "data-object.acl.mod"          update-data-object-acl-handler
+    "data-object.add"              index-data-object-handler
+    "data-object.cp"               index-data-object-handler
     "data-object.metadata.add"     nil
     "data-object.metadata.adda"    nil
     "data-object.metadata.addw"    nil
@@ -252,9 +305,9 @@
     "data-object.metadata.rm"      nil
     "data-object.metadata.rmw"     nil
     "data-object.metadata.set"     nil
-    "data-object.mod"              reindex-data-object
-    "data-object.mv"               rename-data-object
-    "data-object.rm"               rm-data-object
+    "data-object.mod"              reindex-data-object-handler
+    "data-object.mv"               rename-data-object-handler
+    "data-object.rm"               rm-data-object-handler
     "data-object.sys-metadata.mod" nil
     "zone.mv"                      nil
                                    nil))
