@@ -370,7 +370,7 @@
     "collection.metadata.adda"     reindex-collection-metadata-hander
     "collection.metadata.cp"       nil
     "collection.metadata.mod"      nil
-    "collection.metadata.rm"       nil
+    "collection.metadata.rm"       reindex-collection-metadata-hander
     "collection.metadata.rmw"      nil
     "collection.metadata.set"      nil
     "collection.mv"                rename-collection-handler
