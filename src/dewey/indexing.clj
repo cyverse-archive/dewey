@@ -367,7 +367,7 @@
     "collection.acl.mod"           update-collection-acl-handler
     "collection.add"               index-collection-handler
     "collection.metadata.add"      reindex-collection-metadata-hander
-    "collection.metadata.adda"     nil
+    "collection.metadata.adda"     reindex-collection-metadata-hander
     "collection.metadata.cp"       nil
     "collection.metadata.mod"      nil
     "collection.metadata.rm"       nil
