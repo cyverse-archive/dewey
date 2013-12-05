@@ -329,6 +329,24 @@
   (update-data-object-acl irods (:entity msg)))
 
 
+(defn- update-data-object-sys-meta-handler
+  [irods msg]
+  (let [path         (:entity msg)
+        mapping-type (get-mapping-type ::data-object)
+        id           (get-id path)]
+    (if (es-doc/present? index mapping-type id)
+      (es-doc/update-with-script index
+                                 mapping-type
+                                 id
+                                 "ctx._source.dateModified = dateModified;
+                                  ctx._source.fileSize = fileSize;
+                                  ctx._source.fileType = fileType;"
+                                 {:dateModified (get-date-modified irods path)
+                                  :fileSize     (get-data-object-size irods path)
+                                  :fileType     (get-data-object-type irods path)})
+      (index-entry ::data-object (format-data-object-doc irods path)))))
+
+
 (defn- resolve-consumer
   [routing-key]
   (case routing-key
@@ -357,7 +375,7 @@
     "data-object.mod"              reindex-data-object-handler
     "data-object.mv"               rename-data-object-handler
     "data-object.rm"               rm-data-object-handler
-    "data-object.sys-metadata.mod" nil
+    "data-object.sys-metadata.mod" update-data-object-sys-meta-handler
     "zone.mv"                      nil
                                    nil))
 
