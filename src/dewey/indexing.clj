@@ -268,6 +268,20 @@
     (update-parent-modify-time irods (:entity msg))))
 
 
+(defn- reindex-collection-metadata-hander
+  [irods msg]
+  (let [path         (:entity msg)
+        mapping-type (get-mapping-type ::collection)
+        id           (get-id path)]
+    (if (es-doc/present? index mapping-type id)
+      (es-doc/update-with-script index
+                                 mapping-type
+                                 id
+                                 "ctx._source.metadata = metadata"
+                                 {:metadata (get-metadata irods path)})
+      (index-entry ::collection (format-collection-doc irods path)))))
+
+
 (defn- reindex-data-object-handler
   [irods msg]
   (let [path         (:entity msg)
@@ -352,7 +366,7 @@
   (case routing-key
     "collection.acl.mod"           update-collection-acl-handler
     "collection.add"               index-collection-handler
-    "collection.metadata.add"      nil
+    "collection.metadata.add"      reindex-collection-metadata-hander
     "collection.metadata.adda"     nil
     "collection.metadata.cp"       nil
     "collection.metadata.mod"      nil
