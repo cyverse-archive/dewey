@@ -372,7 +372,7 @@
     "collection.metadata.mod"      nil
     "collection.metadata.rm"       reindex-collection-metadata-hander
     "collection.metadata.rmw"      nil
-    "collection.metadata.set"      nil
+    "collection.metadata.set"      reindex-collection-metadata-hander
     "collection.mv"                rename-collection-handler
     "collection.rm"                rm-collection-handler
     "data-object.acl.mod"          update-data-object-acl-handler
