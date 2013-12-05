@@ -229,6 +229,19 @@
     (doall (map rec-coll-op (r-lazy/list-subdirs-in irods coll-path)))))
 
 
+(defn- reindex-metadata
+  [irods entity-type path format-doc]
+  (let [mapping-type (get-mapping-type entity-type)
+        id           (get-id path)]
+    (if (es-doc/present? index mapping-type id)
+      (es-doc/update-with-script index
+        mapping-type
+        id
+        "ctx._source.metadata = metadata"
+        {:metadata (get-metadata irods path)})
+      (index-entry entity-type (format-doc irods path)))))
+
+
 (defn- update-acl
   [irods entity-type doc-formatter entry]
   (let [mapping-type (get-mapping-type entity-type)
@@ -270,16 +283,7 @@
 
 (defn- reindex-collection-metadata-hander
   [irods msg]
-  (let [path         (:entity msg)
-        mapping-type (get-mapping-type ::collection)
-        id           (get-id path)]
-    (if (es-doc/present? index mapping-type id)
-      (es-doc/update-with-script index
-                                 mapping-type
-                                 id
-                                 "ctx._source.metadata = metadata"
-                                 {:metadata (get-metadata irods path)})
-      (index-entry ::collection (format-collection-doc irods path)))))
+  (reindex-metadata irods ::collection (:entity msg) format-collection-doc))
 
 
 (defn- reindex-data-object-handler
@@ -299,6 +303,11 @@
                    (format-data-object-doc irods path
                      :file-size (:size msg)
                      :file-type (:type msg))))))
+
+
+(defn- reindex-data-object-metadata-hander
+  [irods msg]
+  (reindex-metadata irods ::data-object (:entity msg) format-data-object-doc))
 
 
 (defn- rename-collection-handler
@@ -378,14 +387,14 @@
     "data-object.acl.mod"          update-data-object-acl-handler
     "data-object.add"              index-data-object-handler
     "data-object.cp"               index-data-object-handler
-    "data-object.metadata.add"     nil
-    "data-object.metadata.adda"    nil
+    "data-object.metadata.add"     reindex-data-object-metadata-hander
+    "data-object.metadata.adda"    reindex-data-object-metadata-hander
     "data-object.metadata.addw"    nil
     "data-object.metadata.cp"      nil
     "data-object.metadata.mod"     nil
-    "data-object.metadata.rm"      nil
+    "data-object.metadata.rm"      reindex-data-object-metadata-hander
     "data-object.metadata.rmw"     nil
-    "data-object.metadata.set"     nil
+    "data-object.metadata.set"     reindex-data-object-metadata-hander
     "data-object.mod"              reindex-data-object-handler
     "data-object.mv"               rename-data-object-handler
     "data-object.rm"               rm-data-object-handler
