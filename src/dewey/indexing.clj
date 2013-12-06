@@ -1,5 +1,6 @@
 (ns dewey.indexing
-  (:require [clj-time.coerce :as t-conv]
+  (:require [clojure.string :as string]
+            [clj-time.coerce :as t-conv]
             [clj-time.format :as t-fmt]
             [clojurewerkz.elastisch.query :as es-query]
             [clojurewerkz.elastisch.rest.document :as es-doc]
@@ -14,6 +15,31 @@
 
 
 (def ^{:private true :const true} index "data")
+
+(defn sql-glob->regex
+  "Takes a glob-format string and returns a regex.
+
+   This code is adapted from the glob->regex function in the clj-glob project,
+   https://github.com/jkk/clj-glob/blob/master/src/org/satta/glob.clj"
+  [s]
+  (loop [stream      s
+         re          ""
+         curly-depth 0]
+    (let [[c j] stream]
+      (cond
+        (nil? c)                          (re-pattern (str (if (= \. (first s)) "" "(?=[^\\.])")
+                                                           re))
+        (= c \\)                          (recur (nnext stream) (str re c c) curly-depth)
+        (= c \/)                          (recur (next stream)
+                                                 (str re (if (= \. j) c "/(?=[^\\.])"))
+                                                 curly-depth)
+        (= c \%)                          (recur (next stream) (str re "[^/]*") curly-depth)
+        (= c \_)                          (recur (next stream) (str re "[^/]") curly-depth)
+        (= c \{)                          (recur (next stream) (str re \() (inc curly-depth))
+        (= c \})                          (recur (next stream) (str re \)) (dec curly-depth))
+        (and (= c \,) (< 0 curly-depth))  (recur (next stream) (str re \|) curly-depth)
+        (#{\. \( \) \| \+ \^ \$ \@ \%} c) (recur (next stream) (str re \\ c) curly-depth)
+        :else                             (recur (next stream) (str re c) curly-depth)))))
 
 
 (defn- get-mapping-type
@@ -318,6 +344,15 @@
   (reindex-metadata irods ::data-object (:destination msg) format-data-object-doc))
 
 
+(defn- reindex-multiobject-metadata-handler
+  [irods msg]
+  (let [coll-path   (file/dirname (:pattern msg))
+        obj-pattern (sql-glob->regex (file/basename (:pattern msg)))]
+    (doseq [obj (r-lazy/list-files-in irods coll-path)]
+      (when (re-matches obj-pattern (.getNodeLabelDisplayValue obj))
+        (reindex-metadata irods ::data-object obj format-data-object-doc)))))
+
+
 (defn- rename-collection-handler
   [irods msg]
   (let [old-path (:entity msg)
@@ -397,7 +432,7 @@
     "data-object.cp"               index-data-object-handler
     "data-object.metadata.add"     reindex-data-object-metadata-handler
     "data-object.metadata.adda"    reindex-data-object-metadata-handler
-    "data-object.metadata.addw"    nil
+    "data-object.metadata.addw"    reindex-multiobject-metadata-handler
     "data-object.metadata.cp"      reinidex-obj-dest-metadata-handler
     "data-object.metadata.mod"     reindex-data-object-metadata-handler
     "data-object.metadata.rm"      reindex-data-object-metadata-handler

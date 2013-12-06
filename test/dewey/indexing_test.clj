@@ -9,4 +9,3 @@
   (fact "works for a string containing a posix time in milliseconds"
     (format-time "1386180216000") => "2013-12-04T18:03:36.000"))
 
-
