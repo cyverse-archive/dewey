@@ -281,10 +281,13 @@
     (update-parent-modify-time irods (:entity msg))))
 
 
-(defn- reindex-collection-metadata-hander
+(defn- reindex-collection-metadata-handler
   [irods msg]
   (reindex-metadata irods ::collection (:entity msg) format-collection-doc))
 
+(defn- reinidex-coll-dest-metadata-handler
+  [irods msg]
+  (reindex-metadata irods ::collection (:destination msg) format-collection-doc))
 
 (defn- reindex-data-object-handler
   [irods msg]
@@ -305,7 +308,7 @@
                      :file-type (:type msg))))))
 
 
-(defn- reindex-data-object-metadata-hander
+(defn- reindex-data-object-metadata-handler
   [irods msg]
   (reindex-metadata irods ::data-object (:entity msg) format-data-object-doc))
 
@@ -375,26 +378,26 @@
   (case routing-key
     "collection.acl.mod"           update-collection-acl-handler
     "collection.add"               index-collection-handler
-    "collection.metadata.add"      reindex-collection-metadata-hander
-    "collection.metadata.adda"     reindex-collection-metadata-hander
-    "collection.metadata.cp"       nil
+    "collection.metadata.add"      reindex-collection-metadata-handler
+    "collection.metadata.adda"     reindex-collection-metadata-handler
+    "collection.metadata.cp"       reinidex-coll-dest-metadata-handler
     "collection.metadata.mod"      nil
-    "collection.metadata.rm"       reindex-collection-metadata-hander
+    "collection.metadata.rm"       reindex-collection-metadata-handler
     "collection.metadata.rmw"      nil
-    "collection.metadata.set"      reindex-collection-metadata-hander
+    "collection.metadata.set"      reindex-collection-metadata-handler
     "collection.mv"                rename-collection-handler
     "collection.rm"                rm-collection-handler
     "data-object.acl.mod"          update-data-object-acl-handler
     "data-object.add"              index-data-object-handler
     "data-object.cp"               index-data-object-handler
-    "data-object.metadata.add"     reindex-data-object-metadata-hander
-    "data-object.metadata.adda"    reindex-data-object-metadata-hander
+    "data-object.metadata.add"     reindex-data-object-metadata-handler
+    "data-object.metadata.adda"    reindex-data-object-metadata-handler
     "data-object.metadata.addw"    nil
     "data-object.metadata.cp"      nil
     "data-object.metadata.mod"     nil
-    "data-object.metadata.rm"      reindex-data-object-metadata-hander
+    "data-object.metadata.rm"      reindex-data-object-metadata-handler
     "data-object.metadata.rmw"     nil
-    "data-object.metadata.set"     reindex-data-object-metadata-hander
+    "data-object.metadata.set"     reindex-data-object-metadata-handler
     "data-object.mod"              reindex-data-object-handler
     "data-object.mv"               rename-data-object-handler
     "data-object.rm"               rm-data-object-handler
