@@ -313,6 +313,11 @@
   (reindex-metadata irods ::data-object (:entity msg) format-data-object-doc))
 
 
+(defn- reinidex-obj-dest-metadata-handler
+  [irods msg]
+  (reindex-metadata irods ::data-object (:destination msg) format-data-object-doc))
+
+
 (defn- rename-collection-handler
   [irods msg]
   (let [old-path (:entity msg)
@@ -393,7 +398,7 @@
     "data-object.metadata.add"     reindex-data-object-metadata-handler
     "data-object.metadata.adda"    reindex-data-object-metadata-handler
     "data-object.metadata.addw"    nil
-    "data-object.metadata.cp"      nil
+    "data-object.metadata.cp"      reinidex-obj-dest-metadata-handler
     "data-object.metadata.mod"     nil
     "data-object.metadata.rm"      reindex-data-object-metadata-handler
     "data-object.metadata.rmw"     nil
