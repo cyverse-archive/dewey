@@ -386,7 +386,7 @@
     "collection.metadata.add"      reindex-collection-metadata-handler
     "collection.metadata.adda"     reindex-collection-metadata-handler
     "collection.metadata.cp"       reinidex-coll-dest-metadata-handler
-    "collection.metadata.mod"      nil
+    "collection.metadata.mod"      reindex-collection-metadata-handler
     "collection.metadata.rm"       reindex-collection-metadata-handler
     "collection.metadata.rmw"      nil
     "collection.metadata.set"      reindex-collection-metadata-handler
@@ -399,7 +399,7 @@
     "data-object.metadata.adda"    reindex-data-object-metadata-handler
     "data-object.metadata.addw"    nil
     "data-object.metadata.cp"      reinidex-obj-dest-metadata-handler
-    "data-object.metadata.mod"     nil
+    "data-object.metadata.mod"     reindex-data-object-metadata-handler
     "data-object.metadata.rm"      reindex-data-object-metadata-handler
     "data-object.metadata.rmw"     nil
     "data-object.metadata.set"     reindex-data-object-metadata-handler
