@@ -442,7 +442,6 @@
     "data-object.mv"               rename-data-object-handler
     "data-object.rm"               rm-data-object-handler
     "data-object.sys-metadata.mod" update-data-object-sys-meta-handler
-    "zone.mv"                      nil
                                    nil))
 
 
