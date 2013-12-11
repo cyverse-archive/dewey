@@ -234,7 +234,7 @@
                                    parent-id
                                    "ctx._source.dateModified = dateModified;"
                                    {:dateModified (get-date-modified irods parent-path)})
-        (index-entry mapping-type (format-collection-doc irods parent-path))))))
+        (index-entry ::collection (format-collection-doc irods parent-path))))))
 
 
 (defn- rename-entry
