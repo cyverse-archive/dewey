@@ -5,6 +5,9 @@
             [dewey.amq :as amq]
             [dewey.indexing :as indexing]))
 
+(def ^{:const true :private true} exchange "irods")
+(def ^{:const true :private true} queue "indexing")
+
 (defn- init-irods
   []
   (let [cfg (r-init/init "localhost" "1247" "rods" "rods" "/iplant/home/rods" "iplant" "demoResc")]
@@ -15,4 +18,8 @@
 (defn -main
   [& args]
   (let [irods-cfg (init-irods)]
-    (amq/attach-to-exchange "indexing" (partial indexing/consume-msg irods-cfg))))
+    (amq/attach-to-exchange exchange
+                            queue
+                            (partial indexing/consume-msg irods-cfg)
+                            "data-object.#"
+                            "collection.#")))
