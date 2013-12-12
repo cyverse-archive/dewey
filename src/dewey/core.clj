@@ -1,39 +1,28 @@
 (ns dewey.core
   (:gen-class)
-  (:require [clojurewerkz.elastisch.rest :as es]
+  (:use [slingshot.slingshot :only [try+ throw+]])
+  (:require [clojure.tools.cli :as cli]
+            [clojure.tools.logging :as log]
+            [clojurewerkz.elastisch.rest :as es]
             [clj-jargon.init :as r-init]
             [clj-jargon.lazy-listings :as r-sq]
+            [clojure-commons.config :as config]
             [dewey.amq :as amq]
             [dewey.indexing :as indexing])
-  (:import [java.net URL]))
-
-
-(def ^{:const true :private true} props {"dewey.amqp.exchange"          "irods"
-                                         "dewey.amqp.host"              "localhost"
-                                         "dewey.amqp.password"          "guest"
-                                         "dewey.amqp.port"              5672
-                                         "dewey.amqp.user"              "guest"
-                                         "dewey.es.host"                "localhost"
-                                         "dewey.es.port"                9200
-                                         "dewey.irods.default-resource" "demoResc"
-                                         "dewey.irods.home"             "/iplant/home/rods"
-                                         "dewey.irods.host"             "localhost"
-                                         "dewey.irods.password"         "rods"
-                                         "dewey.irods.port"             1247
-                                         "dewey.irods.user"             "rods"
-                                         "dewey.irods.zone"             "iplant"})
+  (:import [java.net URL]
+           [java.util Properties]))
 
 
 (defn- init-es
   [props]
-  (let [url (URL. "http" (get props "dewey.es.host") (get props "dewey.es.port") "")]
+  (let [url (URL. "http" (get props "dewey.es.host") (Integer. (get props "dewey.es.port")) "")]
     (es/connect! (str url))))
 
 
 (defn- init-irods
   [props]
   (let [cfg (r-init/init (get props "dewey.irods.host")
-                         (str (get props "dewey.irods.port"))
+                         (get props "dewey.irods.port")
                          (get props "dewey.irods.user")
                          (get props "dewey.irods.password")
                          (get props "dewey.irods.home")
@@ -44,16 +33,57 @@
     cfg))
 
 
+(defn- listen
+  [props irods-cfg]
+  (amq/attach-to-exchange (get props "dewey.amqp.host")
+                          (Integer. (get props "dewey.amqp.port"))
+                          (get props "dewey.amqp.user")
+                          (get props "dewey.amqp.password")
+                          (get props "dewey.amqp.exchange.name")
+                          (Boolean. (get props "dewey.amqp.exchange.durable"))
+                          (Boolean. (get props "dewey.amqp.exchange.auto-delete"))
+                          "indexing"
+                          (partial indexing/consume-msg irods-cfg)
+                          "data-object.#"
+                          "collection.#"))
+
+
+(defn- update-props
+  [load-props props]
+  (let [props-ref (ref props)]
+    (try+
+      (load-props props-ref)
+      (catch Object _
+        (log/error "Failed to load configuration parameters.")))
+    (when (.isEmpty @props-ref)
+      (throw+ {:type :cfg-problem :msg "Don't have any configuration parameters."}))
+    (when-not (= props @props-ref)
+      (config/log-config props-ref))
+    @props-ref))
+
+
+(defn- run
+  [props-loader]
+  (let [props (update-props props-loader (Properties.))]
+    (init-es props)
+    (listen props (init-irods props))))
+
+
+(defn- parse-args
+  [args]
+  (cli/cli args
+    ["-c" "--config" "sets the local configuration file to be read, bypassing Zookeeper"]
+    ["-h" "--help"   "show help and exit" :flag true]))
+
+
 (defn -main
   [& args]
-  (let [irods-cfg (init-irods props)]
-    (init-es props)
-    (amq/attach-to-exchange (get props "dewey.amqp.host")
-                            (get props "dewey.amqp.port")
-                            (get props "dewey.amqp.user")
-                            (get props "dewey.amqp.password")
-                            (get props "dewey.amqp.exchange")
-                            "indexing"
-                            (partial indexing/consume-msg irods-cfg)
-                            "data-object.#"
-                            "collection.#")))
+  (try+
+    (let [[opts _ help-str] (parse-args args)]
+      (if (:help opts)
+        (println help-str)
+        (run (if-let [cfg-file (:config opts)]
+               (partial config/load-config-from-file nil cfg-file)
+               #(config/load-config-from-zookeeper % "dewey")))))
+    (catch Object _
+      (log/error (:throwable &throw-context) "UNEXPECTED ERROR - EXITING"))))

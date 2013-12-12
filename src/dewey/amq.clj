@@ -24,19 +24,22 @@
      port - the port the AMQP broker listends on
      user - the AMQP user
      password - the AMQP user password
-     exchange - the name of the exchange
+     exchange-name - the name of the exchange
+     exchange-durable - a flag indicating whether or not the exchange is durable
+     exchange-auto-delete - the exchange auto delete flag
      queue - the name of the queue
      consumer - the function that will receive the JSON document
      topics - Optionally, a list of topics to listen for
 
    TODO handle errors"
-  [host port user password exchange queue consumer & topics]
+  [host port user password exchange-name exchange-durable exchange-auto-delete queue consumer
+   & topics]
   (let [conn (rmq/connect {:host host :port port :username user :password password})
         ch   (lch/open conn)]
-    (le/declare ch exchange "topic")
+    (le/topic ch exchange-name :durable exchange-durable :auto-delete exchange-auto-delete)
     (lq/declare ch queue)
     (if (empty? topics)
-      (lq/bind ch queue exchange :routing-key "#")
+      (lq/bind ch queue exchange-name :routing-key "#")
       (doseq [topic topics]
-        (lq/bind ch queue exchange :routing-key topic)))
+        (lq/bind ch queue exchange-name :routing-key topic)))
     (lc/subscribe ch queue (mk-handler consumer) :auto-ack true)))
