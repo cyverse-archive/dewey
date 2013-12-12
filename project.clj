@@ -10,10 +10,11 @@
                  [cheshire "5.2.0"]
                  [clj-time "0.6.0"]
                  [clojurewerkz/elastisch "1.2.0"]
-                 [com.novemberain/langohr "1.7.0"]
+                 [com.novemberain/langohr "1.6.0"]
                  [slingshot "0.10.3"]
                  [org.iplantc/clj-jargon "0.3.1"]
                  [org.iplantc/clojure-commons "1.4.7"]]
+  :resource-paths []
   :profiles {:dev {:dependencies   [[midje "1.6.0"]]
                    :resource-paths ["dev-resource"]}}
   :plugins [[org.iplantc/lein-iplant-rpm "1.4.3-SNAPSHOT"]]
