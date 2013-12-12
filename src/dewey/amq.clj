@@ -36,7 +36,7 @@
    & topics]
   (let [conn (rmq/connect {:host host :port port :username user :password password})
         ch   (lch/open conn)]
-    (le/topic ch exchange-name :durable exchange-durable :auto-delete exchange-auto-delete)
+    (le/topic ch exchange-name #_(:durable exchange-durable :auto-delete exchange-auto-delete)) ;; TODO sort this out
     (lq/declare ch queue)
     (if (empty? topics)
       (lq/bind ch queue exchange-name :routing-key "#")
