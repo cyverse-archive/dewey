@@ -1,6 +1,6 @@
 (defproject dewey "0.1-SNAPSHOT"
   :description "This is a RabbitMQ client responsible for keeping an elasticsearch index
-                synchronized with an iRODS repository."
+                synchronized with an iRODS repository using messages produced by iRODS."
   :license {:url "file://LICENSE.txt"}
   :aot [dewey.core]
   :main dewey.core
@@ -16,5 +16,10 @@
                  [org.iplantc/clojure-commons "1.4.7"]]
   :profiles {:dev {:dependencies   [[midje "1.6.0"]]
                    :resource-paths ["dev-resource"]}}
+  :plugins [[org.iplantc/lein-iplant-rpm "1.4.3-SNAPSHOT"]]
+  :iplant-rpm {:summary      "dewey"
+               :dependencies ["iplant-services-config >= 0.1.0-5"]
+               :config-files ["log4j.properties"]
+               :config-path  "resources"}
   :repositories {"iplantCollaborative"
                  "http://projects.iplantcollaborative.org/archiva/repository/internal/"})
