@@ -20,15 +20,19 @@
    messages in the queue are JSON documents.
 
    Parameters:
+     host - the host of the AMQP broker
+     port - the port the AMQP broker listends on
+     user - the AMQP user
+     password - the AMQP user password
      exchange - the name of the exchange
      queue - the name of the queue
      consumer - the function that will receive the JSON document
      topics - Optionally, a list of topics to listen for
 
    TODO handle errors"
-  [exchange queue consumer & topics]
-  (let [conn    (rmq/connect)
-        ch      (lch/open conn)]
+  [host port user password exchange queue consumer & topics]
+  (let [conn (rmq/connect {:host host :port port :username user :password password})
+        ch   (lch/open conn)]
     (le/declare ch exchange "topic")
     (lq/declare ch queue)
     (if (empty? topics)
