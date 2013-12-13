@@ -34,7 +34,7 @@
    TODO handle errors"
   [host port user password exchange-name exchange-durable exchange-auto-delete queue consumer
    & topics]
-  (let [conn (rmq/connect {:host "150.135.93.154" :port port :username user :password password})
+  (let [conn (rmq/connect {:host host :port port :username user :password password})
         ch   (lch/open conn)]
     (le/topic ch exchange-name #_(:durable exchange-durable :auto-delete exchange-auto-delete)) ;; TODO sort this out
     (lq/declare ch queue)
