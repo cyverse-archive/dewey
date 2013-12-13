@@ -1,6 +1,8 @@
 (ns dewey.amq
   "This library mananges the connection to the AMQP queue."
-  (:require [cheshire.core :as json]
+  (:use [slingshot.slingshot :only [try+]])
+  (:require [clojure.tools.logging :as log]
+            [cheshire.core :as json]
             [langohr.channel :as lch]
             [langohr.core :as rmq]
             [langohr.consumers :as lc]
@@ -11,7 +13,10 @@
 (defn- mk-handler
   [consume]
   (fn [_ {:keys [routing-key]} ^bytes payload]
-    (consume routing-key (json/parse-string (String. payload "UTF-8") true))))
+    (try+
+      (consume routing-key (json/parse-string (String. payload "UTF-8") true))
+      (catch Object _
+        (log/error (:throwable &throw-context) "MESSAGE HANDLING ERROR")))))
 
 
 (defn attach-to-exchange
