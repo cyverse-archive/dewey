@@ -1,6 +1,8 @@
 (ns dewey.amq
   "This library mananges the connection to the AMQP queue."
-  (:require [cheshire.core :as json]
+  (:require [clojure.string :as string]
+            [clojure.tools.logging :as log]
+            [cheshire.core :as json]
             [langohr.channel :as lch]
             [langohr.core :as rmq]
             [langohr.consumers :as lc]
@@ -34,6 +36,7 @@
    TODO handle errors"
   [host port user password exchange-name exchange-durable exchange-auto-delete queue consumer
    & topics]
+  (log/error (string/replace host #"\s" "_"))
   (let [conn (rmq/connect {:host host :port port :username user :password password})
         ch   (lch/open conn)]
     (le/topic ch exchange-name #_(:durable exchange-durable :auto-delete exchange-auto-delete)) ;; TODO sort this out
