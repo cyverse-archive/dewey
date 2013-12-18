@@ -51,7 +51,7 @@
 
 (defn- format-user
   ([user] (format-user (:name user) (:zone user)))
-  ([name zone] {:username name :zone zone}))
+  ([name zone] (str name \# zone)))
 
 
 (defn- format-acl-entry
