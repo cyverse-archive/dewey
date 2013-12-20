@@ -21,16 +21,13 @@
 
 (defn- init-irods
   [props]
-  (let [cfg (r-init/init (get props "dewey.irods.host")
-                         (get props "dewey.irods.port")
-                         (get props "dewey.irods.user")
-                         (get props "dewey.irods.password")
-                         (get props "dewey.irods.home")
-                         (get props "dewey.irods.zone")
-                         (get props "dewey.irods.default-resource"))]
-    (r-init/with-jargon cfg [irods]
-      (r-sq/define-specific-queries irods))
-    cfg))
+  (r-init/init (get props "dewey.irods.host")
+               (get props "dewey.irods.port")
+               (get props "dewey.irods.user")
+               (get props "dewey.irods.password")
+               (get props "dewey.irods.home")
+               (get props "dewey.irods.zone")
+               (get props "dewey.irods.default-resource")))
 
 
 (defn- listen
