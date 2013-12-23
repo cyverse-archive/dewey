@@ -41,5 +41,4 @@
     (sql-glob->regex "{") => #"\{"
     (sql-glob->regex "|") => #"\|"
     (sql-glob->regex "(") => #"\("
-    (sql-glob->regex ")") => #"\)"
-    ))
+    (sql-glob->regex ")") => #"\)"))
