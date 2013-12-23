@@ -4,8 +4,7 @@
   (:require [clojure.tools.cli :as cli]
             [clojure.tools.logging :as log]
             [clojurewerkz.elastisch.rest :as es]
-            [clj-jargon.init :as r-init]
-            [clj-jargon.lazy-listings :as r-sq]
+            [clj-jargon.init :as irods]
             [clojure-commons.config :as config]
             [dewey.amq :as amq]
             [dewey.indexing :as indexing])
@@ -21,13 +20,13 @@
 
 (defn- init-irods
   [props]
-  (r-init/init (get props "dewey.irods.host")
-               (get props "dewey.irods.port")
-               (get props "dewey.irods.user")
-               (get props "dewey.irods.password")
-               (get props "dewey.irods.home")
-               (get props "dewey.irods.zone")
-               (get props "dewey.irods.default-resource")))
+  (irods/init (get props "dewey.irods.host")
+              (get props "dewey.irods.port")
+              (get props "dewey.irods.user")
+              (get props "dewey.irods.password")
+              (get props "dewey.irods.home")
+              (get props "dewey.irods.zone")
+              (get props "dewey.irods.default-resource")))
 
 
 (defn- listen
