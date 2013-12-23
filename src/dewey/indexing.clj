@@ -1,81 +1,15 @@
 (ns dewey.indexing
   (:require [clojure.string :as string]
-            [clj-time.coerce :as t-conv]
-            [clj-time.format :as t-fmt]
             [clojurewerkz.elastisch.query :as es-query]
             [clojurewerkz.elastisch.rest.document :as es-doc]
             [clj-jargon.init :as r-init]
             [clj-jargon.item-info :as r-info]
             [clj-jargon.lazy-listings :as r-lazy]
             [clj-jargon.metadata :as r-meta]
-            [clj-jargon.permissions :as r-perm]
             [clojure-commons.file-utils :as file]
+            [dewey.doc-prep :as prep]
             [dewey.util :as util])
-  (:import [java.util Date]
-           [org.irods.jargon.core.query CollectionAndDataObjectListingEntry]))
-
-
-(def ^{:private true :const true} index "data")
-
-
-; TESTABLE
-(defn- get-mapping-type
-  [entity-type]
-  (case entity-type
-    ::collection  "folder"
-    ::data-object "file"))
-
-
-; TESTABLE
-(defn- format-user
-  ([user] (format-user (:name user) (:zone user)))
-  ([name zone] (str name \# zone)))
-
-
-; TESTABLE
-(defn- format-acl-entry
-  [acl-entry]
-  (letfn [(fmt-perm [perm] (condp = perm
-                             r-perm/own-perm   :own
-                             r-perm/write-perm :write
-                             r-perm/read-perm  :read
-                             nil))]
-    {:permission (fmt-perm (.getFilePermissionEnum acl-entry))
-     :user       (format-user (.getUserName acl-entry) (.getUserZone acl-entry))}))
-
-
-; TESTABLE
-(defn- format-acl
-  [acl]
-  (remove (comp nil? :permission) (map format-acl-entry acl)))
-
-
-; TESTABLE
-(defmulti format-time type)
-
-(defmethod format-time String
-  [posix-time-ms]
-  (->> posix-time-ms
-    Long/parseLong
-    t-conv/from-long
-    (t-fmt/unparse (t-fmt/formatters :date-hour-minute-second-ms))))
-
-(defmethod format-time Date
-  [time]
-  (t-fmt/unparse (t-fmt/formatters :date-hour-minute-second-ms)
-                 (t-conv/from-date time)))
-
-
-; TESTABLE
-(defmulti ^{:private true} get-id type)
-
-(defmethod get-id String
-  [path]
-  path)
-
-(defmethod get-id CollectionAndDataObjectListingEntry
-  [entry]
-  (.getFormattedAbsolutePath entry))
+  (:import [org.irods.jargon.core.query CollectionAndDataObjectListingEntry]))
 
 
 (derive ::collection  ::entity)
@@ -86,15 +20,15 @@
 
 (defmethod get-acl [::collection String]
   [irods _ path]
-  (format-acl (.listPermissionsForCollection (:collectionAO irods) path)))
+  (prep/format-acl (.listPermissionsForCollection (:collectionAO irods) path)))
 
 (defmethod get-acl [::data-object String]
   [irods _ path]
-  (format-acl (.listPermissionsForDataObject (:dataObjectAO irods) path)))
+  (prep/format-acl (.listPermissionsForDataObject (:dataObjectAO irods) path)))
 
 (defmethod get-acl [::entity CollectionAndDataObjectListingEntry]
   [irods _ entry]
-  (format-acl (.getUserFilePermission entry)))
+  (prep/format-acl (.getUserFilePermission entry)))
 
 
 (defmulti ^{:private true} get-creator #(vector %2 (type %3)))
@@ -102,16 +36,16 @@
 (defmethod get-creator [::collection String]
   [irods _ path]
   (let [coll (r-info/collection irods path)]
-    (format-user (.getCollectionOwnerName coll) (.getCollectionOwnerZone coll))))
+    (prep/format-user (.getCollectionOwnerName coll) (.getCollectionOwnerZone coll))))
 
 (defmethod get-creator [::data-object String]
   [irods _ path]
   (let [obj (r-info/data-object irods path)]
-    (format-user (.getDataOwnerName obj) (.getDataOwnerZone obj))))
+    (prep/format-user (.getDataOwnerName obj) (.getDataOwnerZone obj))))
 
 (defmethod get-creator [::entity CollectionAndDataObjectListingEntry]
   [irods _ entry]
-  (format-user (.getOwnerName entry) (.getOwnerZone entry)))
+  (prep/format-user (.getOwnerName entry) (.getOwnerZone entry)))
 
 
 (defmulti ^{:private true} get-data-object-size #(type %2))
@@ -127,29 +61,29 @@
 
 (defn- get-data-object-type
   [irods obj]
-  (.getDataTypeName (r-info/data-object irods (get-id obj))))
+  (.getDataTypeName (r-info/data-object irods (prep/format-id obj))))
 
 
 (defmulti ^{:private true} get-date-created #(type %2))
 
 (defmethod get-date-created String
   [irods path]
-  (format-time (r-info/created-date irods path)))
+  (prep/format-time (r-info/created-date irods path)))
 
 (defmethod get-date-created CollectionAndDataObjectListingEntry
   [irods entry]
-  (format-time (.getCreatedAt entry)))
+  (prep/format-time (.getCreatedAt entry)))
 
 
 (defmulti ^{:private true} get-date-modified #(type %2))
 
 (defmethod get-date-modified String
   [irods path]
-  (format-time (r-info/lastmod-date irods path)))
+  (prep/format-time (r-info/lastmod-date irods path)))
 
 (defmethod get-date-modified CollectionAndDataObjectListingEntry
   [irods entry]
-  (format-time (.getModifiedAt entry)))
+  (prep/format-time (.getModifiedAt entry)))
 
 
 (defn- get-metadata
@@ -157,12 +91,12 @@
   (letfn [(fmt-metadata [metadata] {:attribute (:attr metadata)
                                     :value     (:value metadata)
                                     :unit      (:unit metadata)})]
-    (map fmt-metadata (r-meta/get-metadata irods (get-id entry)))))
+    (map fmt-metadata (r-meta/get-metadata irods (prep/format-id entry)))))
 
 
 (defn- format-collection-doc
   [irods coll & {:keys [permissions creator date-created date-modified metadata]}]
-  (let [id (get-id coll)]
+  (let [id (prep/format-id coll)]
     {:id              id
      :label           (file/basename id)
      :userPermissions (or permissions (get-acl irods ::collection coll))
@@ -175,7 +109,7 @@
 (defn- format-data-object-doc
   [irods obj
    & {:keys [permissions creator date-created date-modified metadata file-size file-type]}]
-  (let [id (get-id obj)]
+  (let [id (prep/format-id obj)]
     {:id              id
      :label           (file/basename id)
      :userPermissions (or permissions (get-acl irods ::data-object obj))
@@ -194,24 +128,24 @@
 
 (defn- index-entry
   [entity-type entry]
-  (es-doc/create index (get-mapping-type entity-type) entry :id (:id entry)))
+  (es-doc/create prep/index (prep/get-mapping-type entity-type) entry :id (:id entry)))
 
 
 (defn- remove-entry
   [entity-type id]
-  (let [mapping-type (get-mapping-type entity-type)]
-    (when (es-doc/present? index mapping-type id)
-      (es-doc/delete index mapping-type id))))
+  (let [mapping-type (prep/get-mapping-type entity-type)]
+    (when (es-doc/present? prep/index mapping-type id)
+      (es-doc/delete prep/index mapping-type id))))
 
 
 (defn- update-parent-modify-time
   [irods entity-path]
   (let [parent-path  (get-parent-path entity-path)
-        mapping-type (get-mapping-type ::collection)
-        parent-id    (get-id parent-path)]
+        mapping-type (prep/get-mapping-type ::collection)
+        parent-id    (prep/format-id parent-path)]
     (when (r-info/exists? irods parent-path)
-      (if (es-doc/present? index mapping-type parent-id)
-        (es-doc/update-with-script index
+      (if (es-doc/present? prep/index mapping-type parent-id)
+        (es-doc/update-with-script prep/index
                                    mapping-type
                                    parent-id
                                    "ctx._source.dateModified = dateModified;"
@@ -239,23 +173,23 @@
 
 (defn- reindex-metadata
   [irods entity-type path format-doc]
-  (let [mapping-type (get-mapping-type entity-type)
-        id           (get-id path)]
-    (if (es-doc/present? index mapping-type id)
-      (es-doc/update-with-script index
-        mapping-type
-        id
-        "ctx._source.metadata = metadata"
-        {:metadata (get-metadata irods path)})
+  (let [mapping-type (prep/get-mapping-type entity-type)
+        id           (prep/format-id path)]
+    (if (es-doc/present? prep/index mapping-type id)
+      (es-doc/update-with-script prep/index
+                                 mapping-type
+                                 id
+                                 "ctx._source.metadata = metadata"
+                                 {:metadata (get-metadata irods path)})
       (index-entry entity-type (format-doc irods path)))))
 
 
 (defn- update-acl
   [irods entity-type doc-formatter entry]
-  (let [mapping-type (get-mapping-type entity-type)
-        id           (get-id entry)]
-    (if (es-doc/present? index mapping-type id)
-      (es-doc/update-with-script index
+  (let [mapping-type (prep/get-mapping-type entity-type)
+        id           (prep/format-id entry)]
+    (if (es-doc/present? prep/index mapping-type id)
+      (es-doc/update-with-script prep/index
                                  mapping-type
                                  id
                                  "ctx._source.userPermissions = permissions"
@@ -282,7 +216,7 @@
 (defn- index-data-object-handler
   [irods msg]
   (let [doc (format-data-object-doc irods (:entity msg)
-              :creator   (format-user (:creator msg))
+              :creator   (prep/format-user (:creator msg))
               :file-size (:size msg)
               :file-type (:type msg))]
     (index-entry ::data-object doc)
@@ -300,10 +234,10 @@
 (defn- reindex-data-object-handler
   [irods msg]
   (let [path         (:entity msg)
-        mapping-type (get-mapping-type ::data-object)
-        id           (get-id path)]
-    (if (es-doc/present? index mapping-type id)
-      (es-doc/update-with-script index
+        mapping-type (prep/get-mapping-type ::data-object)
+        id           (prep/format-id path)]
+    (if (es-doc/present? prep/index mapping-type id)
+      (es-doc/update-with-script prep/index
                                  mapping-type
                                  id
                                  "ctx._source.dateModified = dateModified;
@@ -340,7 +274,7 @@
   (let [old-path (:entity msg)
         new-path (:new-path msg)]
     (rename-entry irods ::collection old-path (format-collection-doc irods new-path))
-    (es-doc/delete-by-query-across-all-types index (es-query/wildcard :id (str old-path "/*")))
+    (es-doc/delete-by-query-across-all-types prep/index (es-query/wildcard :id (str old-path "/*")))
     (crawl-collection irods
                       new-path
                       #(index-entry ::collection (format-collection-doc %1 %2))
@@ -380,10 +314,10 @@
 (defn- update-data-object-sys-meta-handler
   [irods msg]
   (let [path         (:entity msg)
-        mapping-type (get-mapping-type ::data-object)
-        id           (get-id path)]
-    (if (es-doc/present? index mapping-type id)
-      (es-doc/update-with-script index
+        mapping-type (prep/get-mapping-type ::data-object)
+        id           (prep/format-id path)]
+    (if (es-doc/present? prep/index mapping-type id)
+      (es-doc/update-with-script prep/index
                                  mapping-type
                                  id
                                  "ctx._source.dateModified = dateModified;
