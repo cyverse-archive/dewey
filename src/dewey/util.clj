@@ -1,9 +1,11 @@
-(ns dewey.util)
+(ns dewey.util
+  "dewey utility functions")
 
 
 (defn- special-regex?
   [c]
   (#{\\ \. \( \) \| \+ \^ \$ \[ \? \* \{} c))
+
 
 (defn- translate-escaped
   [c]
@@ -11,10 +13,7 @@
 
 
 (defn sql-glob->regex
-  "Takes a glob-format string and returns a regex.
-
-   This code was adapted from the glob->regex function in the clj-glob project,
-   https://github.com/jkk/clj-glob/blob/master/src/org/satta/glob.clj on 2013-12-06."
+  "Takes an SQL glob-format string and returns a regex."
   [glob]
   (loop [stream glob
          re     ""]
