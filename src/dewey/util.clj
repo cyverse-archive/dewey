@@ -17,7 +17,7 @@
   [glob]
   (loop [stream glob
          re     ""]
-    (let [[c _] stream]
+    (let [[c] stream]
       (cond
         (nil? c)           (re-pattern re)
         (= c \\)           (recur (nnext stream) (str re (translate-escaped (fnext stream))))
