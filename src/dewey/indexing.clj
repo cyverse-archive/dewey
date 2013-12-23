@@ -9,39 +9,16 @@
             [clj-jargon.lazy-listings :as r-lazy]
             [clj-jargon.metadata :as r-meta]
             [clj-jargon.permissions :as r-perm]
-            [clojure-commons.file-utils :as file])
+            [clojure-commons.file-utils :as file]
+            [dewey.util :as util])
   (:import [java.util Date]
            [org.irods.jargon.core.query CollectionAndDataObjectListingEntry]))
 
 
 (def ^{:private true :const true} index "data")
 
-(defn sql-glob->regex
-  "Takes a glob-format string and returns a regex.
 
-   This code is adapted from the glob->regex function in the clj-glob project,
-   https://github.com/jkk/clj-glob/blob/master/src/org/satta/glob.clj"
-  [s]
-  (loop [stream      s
-         re          ""
-         curly-depth 0]
-    (let [[c j] stream]
-      (cond
-        (nil? c)                          (re-pattern (str (if (= \. (first s)) "" "(?=[^\\.])")
-                                                           re))
-        (= c \\)                          (recur (nnext stream) (str re c c) curly-depth)
-        (= c \/)                          (recur (next stream)
-                                                 (str re (if (= \. j) c "/(?=[^\\.])"))
-                                                 curly-depth)
-        (= c \%)                          (recur (next stream) (str re "[^/]*") curly-depth)
-        (= c \_)                          (recur (next stream) (str re "[^/]") curly-depth)
-        (= c \{)                          (recur (next stream) (str re \() (inc curly-depth))
-        (= c \})                          (recur (next stream) (str re \)) (dec curly-depth))
-        (and (= c \,) (< 0 curly-depth))  (recur (next stream) (str re \|) curly-depth)
-        (#{\. \( \) \| \+ \^ \$ \@ \%} c) (recur (next stream) (str re \\ c) curly-depth)
-        :else                             (recur (next stream) (str re c) curly-depth)))))
-
-
+; TESTABLE
 (defn- get-mapping-type
   [entity-type]
   (case entity-type
@@ -49,11 +26,13 @@
     ::data-object "file"))
 
 
+; TESTABLE
 (defn- format-user
   ([user] (format-user (:name user) (:zone user)))
   ([name zone] (str name \# zone)))
 
 
+; TESTABLE
 (defn- format-acl-entry
   [acl-entry]
   (letfn [(fmt-perm [perm] (condp = perm
@@ -65,11 +44,13 @@
      :user       (format-user (.getUserName acl-entry) (.getUserZone acl-entry))}))
 
 
+; TESTABLE
 (defn- format-acl
   [acl]
   (remove (comp nil? :permission) (map format-acl-entry acl)))
 
 
+; TESTABLE
 (defmulti format-time type)
 
 (defmethod format-time String
@@ -85,6 +66,7 @@
                  (t-conv/from-date time)))
 
 
+; TESTABLE
 (defmulti ^{:private true} get-id type)
 
 (defmethod get-id String
@@ -347,7 +329,7 @@
 (defn- reindex-multiobject-metadata-handler
   [irods msg]
   (let [coll-path   (file/dirname (:pattern msg))
-        obj-pattern (sql-glob->regex (file/basename (:pattern msg)))]
+        obj-pattern (util/sql-glob->regex (file/basename (:pattern msg)))]
     (doseq [obj (r-lazy/list-files-in irods coll-path)]
       (when (re-matches obj-pattern (.getNodeLabelDisplayValue obj))
         (reindex-metadata irods ::data-object obj format-data-object-doc)))))
