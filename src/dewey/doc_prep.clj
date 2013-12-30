@@ -2,9 +2,7 @@
   "This is the logic that formats the elasticsearch index entry or entry update."
   (:require [clj-time.coerce :as t-conv]
             [clj-time.format :as t-fmt]
-            [clj-jargon.item-info :as r-info]
-            [clj-jargon.metadata :as r-meta]
-            [clj-jargon.permissions :as r-perm]
+            [clj-jargon.permissions :as irods]
             [clojure-commons.file-utils :as file])
   (:import [java.util Date]
            [org.irods.jargon.core.query CollectionAndDataObjectListingEntry]))
@@ -24,10 +22,10 @@
 (defn- format-acl-entry
   [acl-entry]
   (letfn [(fmt-perm [perm] (condp = perm
-                             r-perm/own-perm   :own
-                             r-perm/write-perm :write
-                             r-perm/read-perm  :read
-                             nil))]
+                             irods/own-perm   :own
+                             irods/write-perm :write
+                             irods/read-perm  :read
+                                              nil))]
     {:permission (fmt-perm (.getFilePermissionEnum acl-entry))
      :user       (format-user (.getUserName acl-entry) (.getUserZone acl-entry))}))
 
@@ -47,7 +45,9 @@
   (remove (comp nil? :permission) (map format-acl-entry acl)))
 
 
-(defmulti ^{:doc "Formats the index id an entry"} format-id type)
+(defmulti
+  ^{:doc "Formats the index id an entry"}
+  format-id type)
 
 (defmethod format-id String
   [path]
@@ -58,11 +58,11 @@
   (.getFormattedAbsolutePath entry))
 
 
-(defn- format-metadata
-  [metadata]
-  {:attribute (:attr metadata)
-   :value     (:value metadata)
-   :unit      (:unit metadata)})
+(defn- format-avu
+  [avu]
+  {:attribute (:attr avu)
+   :value     (:value avu)
+   :unit      (:unit avu)})
 
 
 (defmulti
@@ -90,105 +90,76 @@
     :data-object "file"))
 
 
-(derive ::collection  ::entity)
-(derive ::data-object ::entity)
+(defn get-acl
+  "Retrives the ACL for an iRODS entity. The entity will be retrieved from the repository if needed.
+
+   Returns:
+     The result is an list of maps. Each map indicates a user permission and has the following form.
+
+     {:permission :own|:read|:write
+     :user       name#zone}"
+  [irods type entity]
+  (format-acl (.acl irods type entity)))
 
 
-(defmulti get-acl #(vector %2 (type %3)))
-
-(defmethod get-acl [::collection String]
-  [irods _ path]
-  (format-acl (.listPermissionsForCollection (:collectionAO irods) path)))
-
-(defmethod get-acl [::data-object String]
-  [irods _ path]
-  (format-acl (.listPermissionsForDataObject (:dataObjectAO irods) path)))
-
-(defmethod get-acl [::entity CollectionAndDataObjectListingEntry]
-  [irods _ entry]
-  (format-acl (.getUserFilePermission entry)))
+(defn- get-creator
+  [irods type entity]
+  (format-user (.creator irods type entity)))
 
 
-(defmulti ^{:private true} get-creator #(vector %2 (type %3)))
-
-(defmethod get-creator [::collection String]
-  [irods _ path]
-  (let [coll (r-info/collection irods path)]
-    (format-user (.getCollectionOwnerName coll) (.getCollectionOwnerZone coll))))
-
-(defmethod get-creator [::data-object String]
-  [irods _ path]
-  (let [obj (r-info/data-object irods path)]
-    (format-user (.getDataOwnerName obj) (.getDataOwnerZone obj))))
-
-(defmethod get-creator [::entity CollectionAndDataObjectListingEntry]
-  [irods _ entry]
-  (format-user (.getOwnerName entry) (.getOwnerZone entry)))
-
-
-(defmulti get-data-object-size #(type %2))
-
-(defmethod get-data-object-size String
+(defn get-data-object-size
+  "Retrieves the size of a data object in bytes. It will retrieve this information from the
+   repository if needed."
   [irods path]
-  (r-info/file-size irods path))
-
-(defmethod get-data-object-size CollectionAndDataObjectListingEntry
-  [irods obj]
-  (.getDataSize obj))
+  (.data-object-size irods path))
 
 
 (defn get-data-object-type
+  "Retrieves the file type of a data object from the repository."
   [irods obj]
-  (.getDataTypeName (r-info/data-object irods (format-id obj))))
+  (.data-object-type irods obj))
 
 
-(defmulti ^{:private true} get-date-created #(type %2))
+(defn- get-date-created
+  [irods entity]
+  (format-time (.date-created irods entity)))
 
-(defmethod get-date-created String
+
+(defn get-date-modified
+  "Retrieves the time when a entity was last modified. It will retrieve this information from the
+   repository if needed. The time returned will have the format DATE-HOUR-MINUTE-SECOND-MS."
   [irods path]
-  (format-time (r-info/created-date irods path)))
-
-(defmethod get-date-created CollectionAndDataObjectListingEntry
-  [irods entry]
-  (format-time (.getCreatedAt entry)))
-
-
-(defmulti get-date-modified #(type %2))
-
-(defmethod get-date-modified String
-  [irods path]
-  (format-time (r-info/lastmod-date irods path)))
-
-(defmethod get-date-modified CollectionAndDataObjectListingEntry
-  [irods entry]
-  (format-time (.getModifiedAt entry)))
+  (format-time (.date-modified irods path)))
 
 
 (defn get-metadata
+  "Retrieves the AVU metadata associated with the provided entity."
   [irods entry]
-  (map format-metadata (r-meta/get-metadata irods (format-id entry))))
+  (map format-avu (.metadata irods entry)))
 
 
 (defn format-collection-doc
+  "Formats an index entry for a collection."
   [irods coll & {:keys [permissions creator date-created date-modified metadata]}]
   (let [id (format-id coll)]
     {:id              id
      :label           (file/basename id)
-     :userPermissions (or permissions (get-acl irods ::collection coll))
-     :creator         (or creator (get-creator irods ::collection coll))
+     :userPermissions (or permissions (get-acl irods :collection coll))
+     :creator         (or creator (get-creator irods :collection coll))
      :dateCreated     (or date-created (get-date-created irods coll))
      :dateModified    (or date-modified (get-date-modified irods coll))
      :metadata        (or metadata (get-metadata irods coll))}))
 
 
 (defn format-data-object-doc
+  "Formats an index entry for a data object"
   [irods obj
    & {:keys [permissions creator date-created date-modified metadata file-size file-type]}]
   (let [id (format-id obj)]
     {:id              id
      :label           (file/basename id)
-     :userPermissions (or permissions (get-acl irods ::data-object obj))
-     :creator         (or creator (get-creator irods ::data-object obj))
+     :userPermissions (or permissions (get-acl irods :data-object obj))
+     :creator         (or creator (get-creator irods :data-object obj))
      :dateCreated     (or date-created (get-date-created irods obj))
      :dateModified    (or date-modified (get-date-modified irods obj))
      :metadata        (or metadata (get-metadata irods obj))

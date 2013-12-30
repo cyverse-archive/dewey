@@ -2,11 +2,9 @@
   (:require [clojure.string :as string]
             [clojurewerkz.elastisch.query :as es-query]
             [clojurewerkz.elastisch.rest.document :as es-doc]
-            [clj-jargon.init :as r-init]
-            [clj-jargon.item-info :as r-info]
-            [clj-jargon.lazy-listings :as r-lazy]
             [clojure-commons.file-utils :as file]
             [dewey.doc-prep :as prep]
+            [dewey.repo :as repo]
             [dewey.util :as util]))
 
 
@@ -32,7 +30,7 @@
   (let [parent-path  (get-parent-path entity-path)
         mapping-type (prep/get-mapping-type :collection)
         parent-id    (prep/format-id parent-path)]
-    (when (r-info/exists? irods parent-path)
+    (when (.exists? irods parent-path)
       (if (es-doc/present? prep/index mapping-type parent-id)
         (es-doc/update-with-script prep/index
                                    mapping-type
@@ -56,8 +54,8 @@
   (letfn [(rec-coll-op [coll]
             (coll-op irods coll)
             (crawl-collection irods (.getFormattedAbsolutePath coll) coll-op obj-op))]
-    (doall (map (partial obj-op irods) (r-lazy/list-files-in irods coll-path)))
-    (doall (map rec-coll-op (r-lazy/list-subdirs-in irods coll-path)))))
+    (doall (map (partial obj-op irods) (.data-objects-in irods coll-path)))
+    (doall (map rec-coll-op (.collections-in irods coll-path)))))
 
 
 (defn- reindex-metadata
@@ -69,7 +67,7 @@
                                  mapping-type
                                  id
                                  "ctx._source.metadata = metadata"
-                                 {:metadata (get-metadata irods path)})
+                                 {:metadata (prep/get-metadata irods path)})
       (index-entry entity-type (format-doc irods path)))))
 
 
@@ -153,7 +151,7 @@
   [irods msg]
   (let [coll-path   (file/dirname (:pattern msg))
         obj-pattern (util/sql-glob->regex (file/basename (:pattern msg)))]
-    (doseq [obj (r-lazy/list-files-in irods coll-path)]
+    (doseq [obj (.data-objects-in irods coll-path)]
       (when (re-matches obj-pattern (.getNodeLabelDisplayValue obj))
         (reindex-metadata irods :data-object obj prep/format-data-object-doc)))))
 
@@ -252,10 +250,5 @@
 
 (defn consume-msg
   [irods-cfg routing-key msg]
-  (try
-    (when-let [consume (resolve-consumer routing-key)]
-      (r-init/with-jargon irods-cfg [irods]
-        (consume irods msg)))
-    (catch Throwable e
-      (.printStackTrace e)
-      (System/exit -1))))
+  (when-let [consume (resolve-consumer routing-key)]
+    (repo/do-with-irods irods-cfg #(consume % msg))))
