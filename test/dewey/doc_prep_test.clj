@@ -16,37 +16,14 @@
    (UserFilePermission. "name4" "name4" FilePermissionEnum/NULL UserTypeEnum/RODS_USER "zone4")])
 
 
-(defn- mk-entry
-  []
-  (doto (CollectionAndDataObjectListingEntry.)
-    (.setPathOrName "path/to/entry")))
-
-
 (facts "about `format-acl`"
   (fact "Formats permissions correctly."
     (set (format-acl (mk-acl))) => #{{:permission :own   :user "name1#zone1"}
                                      {:permission :write :user "name2#zone2"}
                                      {:permission :read  :user "name3#zone3"}}))
 
-
-(facts "About `format-id`"
-  (fact "Works with a path"
-    (format-id "/path/to/entry") => "/path/to/entry")
-  (fact "Works with a CollectionAndDatObjectListingEntry"
-    (format-id (mk-entry)) => "/path/to/entry"))
-
-
 (facts "about `format-time`"
   (fact "works for a java.util.Date object"
     (format-time (Date. 1386180216000)) => "2013-12-04T18:03:36.000")
   (fact "works for a string containing a posix time in milliseconds"
     (format-time "1386180216000") => "2013-12-04T18:03:36.000"))
-
-
-(facts "about `format-user`"
-  (fact "formats with explicit user and zone arguments"
-    (format-user "user" "zone") => "user#zone")
-  (fact "formats with map of :name and :zone entries"
-    (format-user {:name "user" :zone "zone"}) => "user#zone"))
-
-

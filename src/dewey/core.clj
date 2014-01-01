@@ -7,7 +7,7 @@
             [clj-jargon.init :as irods]
             [clojure-commons.config :as config]
             [dewey.amq :as amq]
-            [dewey.indexing :as indexing])
+            [dewey.curation :as curation])
   (:import [java.net URL]
            [java.util Properties]))
 
@@ -39,7 +39,7 @@
                           (Boolean. (get props "dewey.amqp.exchange.durable"))
                           (Boolean. (get props "dewey.amqp.exchange.auto-delete"))
                           "indexing"
-                          (partial indexing/consume-msg irods-cfg)
+                          (partial curation/consume-msg irods-cfg)
                           "data-object.#"
                           "collection.#"))
 

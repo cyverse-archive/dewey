@@ -42,3 +42,8 @@
     (sql-glob->regex "|") => #"\|"
     (sql-glob->regex "(") => #"\("
     (sql-glob->regex ")") => #"\)"))
+
+
+(facts "about `get-parent-path`"
+  (fact "returns parent without trailing slash"
+    (get-parent-path "/parent/child") => "/parent"))
