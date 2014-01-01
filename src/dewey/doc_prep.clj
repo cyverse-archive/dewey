@@ -1,4 +1,5 @@
 (ns dewey.doc-prep
+  "This is the index entry preparation logic."
   (:require [clj-time.coerce :as t-conv]
             [clj-time.format :as t-fmt]
             [clj-jargon.permissions :as irods]
@@ -54,6 +55,13 @@
 
 
 (defn format-metadata
+  "Formats the AVU metadata for indexing. It accepts the metadata as a list of maps representing AVU
+   triples of the form produced by the clj-jargon library. It returns a list of maps of the
+   following form.
+
+   {:attribute name-str
+    :value     value-str
+    :unit      unit-str|nil}"
   [metadata]
   (letfn [(format-avu [avu] {:attribute (:attr avu)
                              :value     (:value avu)
@@ -62,6 +70,17 @@
 
 
 (defn format-file
+  "Formats a file entry for indexing.
+
+   Parameters:
+     id - The index id of the file (its path).
+     acl - The file ACL in the form of a list of UserFilePermission objects.
+     creator - The file's creator as map with :name and :zone keys.
+     date-created - The time when the file was created as a String or Date object.
+     date-modified - The time when the file was last modified as a String or Date object.
+     metadata - A list of AVU triples in the form produced by the clj-jargon library.
+     file-size - The size of the file in bytes.
+     file-type - The media type of the file."
   [id acl creator date-created date-modified metadata file-size file-type]
   {:id              id
    :label           (file/basename id)
@@ -75,6 +94,15 @@
 
 
 (defn format-folder
+  "Formats a folder entry for indexing.
+
+   Parameters:
+     id - The index id of the folder (its path).
+     acl - The folder ACL in the form of a list of UserFilePermission objects.
+     creator - The folder's creator as map with :name and :zone keys.
+     date-created - The time when the folder was created as a String or Date object.
+     date-modified - The time when the folder was last modified as a String or Date object.
+     metadata - A list of AVU triples in the form produced by the clj-jargon library."
   [id acl creator date-created date-modified metadata]
   {:id              id
    :label           (file/basename id)
