@@ -1,6 +1,7 @@
 (ns dewey.curation
   "This namespace contains the logic for handling change messages from iRODS."
   (:require [clojure.string :as string]
+            [clojure.tools.logging :as log]
             [clojure-commons.file-utils :as file]
             [dewey.indexing :as indexing]
             [dewey.repo :as repo]
@@ -218,5 +219,7 @@
    Throws:
      It throws any exception perculating up from below."
   [irods-cfg routing-key msg]
-  (when-let [consume (resolve-consumer routing-key)]
-    (repo/do-with-irods irods-cfg #(consume % msg))))
+  (log/info "received message:  routing key =" routing-key ", message =" msg)
+  (if-let [consume (resolve-consumer routing-key)]
+    (repo/do-with-irods irods-cfg #(consume % msg))
+    (log/warn (str "unknown routing key" routing-key "received with message" msg))))
