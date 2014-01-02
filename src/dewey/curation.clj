@@ -1,4 +1,5 @@
 (ns dewey.curation
+  "This namespace contains the logic for handling change messages from iRODS."
   (:require [clojure.string :as string]
             [clojure-commons.file-utils :as file]
             [dewey.indexing :as indexing]
@@ -206,6 +207,16 @@
 
 
 (defn consume-msg
+  "This is the primary function. It dispatches the message based on a routing key to a function
+   specific to a certain type of message.
+
+   Parameters:
+     irods-cfg   - An irods configuration map for an initialized clj-jargon library.
+     routing-key - The routing key particular to the received message.
+     msg         - The change message.
+
+   Throws:
+     It throws any exception perculating up from below."
   [irods-cfg routing-key msg]
   (when-let [consume (resolve-consumer routing-key)]
     (repo/do-with-irods irods-cfg #(consume % msg))))
