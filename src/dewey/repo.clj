@@ -76,7 +76,7 @@
 
 (defmethod get-date-created String
   [ctx path]
-  (Date/valueOf (r-info/created-date ctx path)))
+  (-> (r-info/created-date ctx path) Long/valueOf Date.))
 
 (defmethod get-date-created CollectionAndDataObjectListingEntry
   [ctx entry]
@@ -87,7 +87,7 @@
 
 (defmethod get-date-modified String
   [ctx path]
-  (Date/valueOf (r-info/lastmod-date ctx path)))
+  (-> (r-info/lastmod-date ctx path) Long/valueOf Date.))
 
 (defmethod get-date-modified CollectionAndDataObjectListingEntry
   [ctx entry]
