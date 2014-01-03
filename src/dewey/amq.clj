@@ -25,23 +25,24 @@
    messages in the queue are JSON documents.
 
    Parameters:
-     host - the host of the AMQP broker
-     port - the port the AMQP broker listends on
-     user - the AMQP user
-     password - the AMQP user password
-     exchange-name - the name of the exchange
-     exchange-durable - a flag indicating whether or not the exchange is durable
-     exchange-auto-delete - the exchange auto delete flag
-     queue - the name of the queue
-     consumer - the function that will receive the JSON document
-     topics - Optionally, a list of topics to listen for
+     host                 - the host of the AMQP broker
+     port                 - the port the AMQP broker listends on
+     user                 - the AMQP user
+     password             - the AMQP user password
+     exchange-name        - the name of the exchange
+     exchange-durable     - a flag indicating whether or not the exchange preserves messages
+     exchange-auto-delete - a flag indicating whether or not the exchange is deleted when all queues
+                            have been dettached
+     queue                - the name of the queue
+     consumer             - the function that will receive the JSON document
+     topics               - Optionally, a list of topics to listen for
 
    TODO handle errors"
   [host port user password exchange-name exchange-durable exchange-auto-delete queue consumer
    & topics]
   (let [conn (rmq/connect {:host host :port port :username user :password password})
         ch   (lch/open conn)]
-    (le/topic ch exchange-name #_(:durable exchange-durable :auto-delete exchange-auto-delete)) ;; TODO sort this out
+    (le/topic ch exchange-name :durable exchange-durable :auto-delete exchange-auto-delete)
     (lq/declare ch queue)
     (if (empty? topics)
       (lq/bind ch queue exchange-name :routing-key "#")
