@@ -38,7 +38,6 @@
                           (get props "dewey.amqp.exchange.name")
                           (Boolean. (get props "dewey.amqp.exchange.durable"))
                           (Boolean. (get props "dewey.amqp.exchange.auto-delete"))
-                          "indexing"
                           (partial curation/consume-msg irods-cfg)
                           "data-object.#"
                           "collection.#"))

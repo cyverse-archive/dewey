@@ -33,17 +33,18 @@
      exchange-durable     - a flag indicating whether or not the exchange preserves messages
      exchange-auto-delete - a flag indicating whether or not the exchange is deleted when all queues
                             have been dettached
-     queue                - the name of the queue
      consumer             - the function that will receive the JSON document
      topics               - Optionally, a list of topics to listen for
 
-   TODO handle errors"
-  [host port user password exchange-name exchange-durable exchange-auto-delete queue consumer
-   & topics]
-  (let [conn (rmq/connect {:host host :port port :username user :password password})
-        ch   (lch/open conn)]
+   Throws:
+     It will throw an exception if it fails to connect to the AMQP broker, setup the exchange, or
+     setup the queue."
+  [host port user password exchange-name exchange-durable exchange-auto-delete consumer & topics]
+  (let [conn  (rmq/connect {:host host :port port :username user :password password})
+        ch    (lch/open conn)
+        queue "indexing"]
     (le/topic ch exchange-name :durable exchange-durable :auto-delete exchange-auto-delete)
-    (lq/declare ch queue)
+    (lq/declare ch queue :durable true)
     (if (empty? topics)
       (lq/bind ch queue exchange-name :routing-key "#")
       (doseq [topic topics]
