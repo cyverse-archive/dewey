@@ -58,7 +58,7 @@
   [irods entity-type entity index-entity]
   (if (indexing/entity-indexed? entity-type entity)
     (indexing/update-acl irods entity-type entity)
-    (index-entity irods entity-type entity)))
+    (index-entity irods entity)))
 
 
 (defn- update-collection-acl
