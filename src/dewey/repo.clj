@@ -105,7 +105,7 @@
 
 (defmethod get-metadata CollectionAndDataObjectListingEntry
   [ctx entity]
-  (r-meta/get-metadata ctx (.getFormattedAbsolutedPath entity)))
+  (r-meta/get-metadata ctx (.getFormattedAbsolutePath entity)))
 
 
 (defprotocol DataStore
