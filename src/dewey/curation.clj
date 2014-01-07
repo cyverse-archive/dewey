@@ -1,11 +1,13 @@
 (ns dewey.curation
   "This namespace contains the logic for handling change messages from iRODS."
+  (:use [slingshot.slingshot :only [try+]])
   (:require [clojure.string :as string]
             [clojure.tools.logging :as log]
             [clojure-commons.file-utils :as file]
             [dewey.indexing :as indexing]
             [dewey.repo :as repo]
-            [dewey.util :as util]))
+            [dewey.util :as util])
+  (:import [org.irods.jargon.core.exception FileNotFoundException]))
 
 
 (defn- update-parent-modify-time
@@ -221,5 +223,9 @@
   [irods-cfg routing-key msg]
   (log/trace "received message:  routing key =" routing-key ", message =" msg)
   (if-let [consume (resolve-consumer routing-key)]
-    (repo/do-with-irods irods-cfg #(consume % msg))
+    (try+
+      (repo/do-with-irods irods-cfg #(consume % msg))
+      (catch FileNotFoundException _
+        (log/info "Attempted to index and non-existent iRODS entity. Most likely it was deleted"
+                  "after this index message was created.")))
     (log/warn (str "unknown routing key" routing-key "received with message" msg))))
