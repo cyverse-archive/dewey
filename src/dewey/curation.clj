@@ -219,7 +219,7 @@
    Throws:
      It throws any exception perculating up from below."
   [irods-cfg routing-key msg]
-  (log/info "received message:  routing key =" routing-key ", message =" msg)
+  (log/trace "received message:  routing key =" routing-key ", message =" msg)
   (if-let [consume (resolve-consumer routing-key)]
     (repo/do-with-irods irods-cfg #(consume % msg))
     (log/warn (str "unknown routing key" routing-key "received with message" msg))))
