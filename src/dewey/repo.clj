@@ -13,11 +13,6 @@
   {:name name :zone zone})
 
 
-;; Create a hierarchy of iRODS entities. Collections and data objects are both entities.
-(derive ::collection  ::entity)
-(derive ::data-object ::entity)
-
-
 (defmulti ^{:private true} get-acl #(vector %2 (type %3)))
 
 (defmethod get-acl [:collection String]
@@ -28,7 +23,11 @@
   [ctx _ path]
   (.listPermissionsForDataObject (:dataObjectAO ctx) path))
 
-(defmethod get-acl [:entity CollectionAndDataObjectListingEntry]
+(defmethod get-acl [:collection CollectionAndDataObjectListingEntry]
+  [ctx _ entry]
+  (.getUserFilePermission entry))
+
+(defmethod get-acl [:data-object CollectionAndDataObjectListingEntry]
   [ctx _ entry]
   (.getUserFilePermission entry))
 
@@ -45,7 +44,11 @@
   (let [obj (r-info/data-object ctx path)]
     (mk-user (.getDataOwnerName obj) (.getDataOwnerZone obj))))
 
-(defmethod get-creator [:entity CollectionAndDataObjectListingEntry]
+(defmethod get-creator [:collection CollectionAndDataObjectListingEntry]
+  [ctx _ entry]
+  (mk-user (.getOwnerName entry) (.getOwnerZone entry)))
+
+(defmethod get-creator [:data-object CollectionAndDataObjectListingEntry]
   [ctx _ entry]
   (mk-user (.getOwnerName entry) (.getOwnerZone entry)))
 
