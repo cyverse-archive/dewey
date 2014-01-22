@@ -7,7 +7,8 @@
             [clj-jargon.init :as irods]
             [clojure-commons.config :as config]
             [dewey.amq :as amq]
-            [dewey.curation :as curation])
+            [dewey.curation :as curation]
+            [dewey.status :as status])
   (:import [java.net URL]
            [java.util Properties]))
 
@@ -63,6 +64,13 @@
       (recur props irods-cfg))))
 
 
+(defn- listen-for-status
+  [props]
+  (.start
+   (Thread.
+     (partial status/start-jetty (get props "dewey.status.listen-port")))))
+
+
 (defn- update-props
   [load-props props]
   (let [props-ref (ref props)]
@@ -81,7 +89,8 @@
   [props-loader]
   (let [props (update-props props-loader (Properties.))]
     (init-es props)
-    (listen props (init-irods props))))
+    (listen props (init-irods props))
+    (listen-for-status props)))
 
 
 (defn- parse-args
