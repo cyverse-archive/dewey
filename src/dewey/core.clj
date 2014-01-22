@@ -14,8 +14,17 @@
 
 (defn- init-es
   [props]
-  (let [url (URL. "http" (get props "dewey.es.host") (Integer. (get props "dewey.es.port")) "")]
-    (es/connect! (str url))))
+  (let [url    (URL. "http" (get props "dewey.es.host") (Integer. (get props "dewey.es.port")) "")
+        found? (try
+                 (es/connect! (str url))
+                 (log/info "Found elasticsearch")
+                 true
+                 (catch Exception _
+                   (log/info "Failed to find elasticsearch.  Retrying...")
+                   false))]
+    (when-not found?
+      (Thread/sleep 1000)
+      (recur props))))
 
 
 (defn- init-irods
