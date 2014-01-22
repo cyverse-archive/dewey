@@ -10,7 +10,7 @@
                  [cheshire "5.2.0"]
                  [clj-time "0.6.0"]
                  [clojurewerkz/elastisch "1.3.0"]
-                 [com.novemberain/langohr "2.0.1"]
+                 [com.novemberain/langohr "2.2.1"]
                  [slingshot "0.10.3"]
                  [org.iplantc/clj-jargon "0.4.0"]
                  [org.iplantc/clojure-commons "1.4.7"]]
