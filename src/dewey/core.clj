@@ -19,8 +19,9 @@
                  (es/connect! (str url))
                  (log/info "Found elasticsearch")
                  true
-                 (catch Exception _
-                   (log/info "Failed to find elasticsearch.  Retrying...")
+                 (catch Exception e
+                   (log/debug e)
+                   (log/info "Failed to find elasticsearch. Retrying...")
                    false))]
     (when-not found?
       (Thread/sleep 1000)
@@ -40,16 +41,26 @@
 
 (defn- listen
   [props irods-cfg]
-  (amq/attach-to-exchange (get props "dewey.amqp.host")
-                          (Integer. (get props "dewey.amqp.port"))
-                          (get props "dewey.amqp.user")
-                          (get props "dewey.amqp.password")
-                          (get props "dewey.amqp.exchange.name")
-                          (Boolean. (get props "dewey.amqp.exchange.durable"))
-                          (Boolean. (get props "dewey.amqp.exchange.auto-delete"))
-                          (partial curation/consume-msg irods-cfg)
-                          "data-object.#"
-                          "collection.#"))
+  (let [attached? (try
+                    (amq/attach-to-exchange (get props "dewey.amqp.host")
+                                            (Integer. (get props "dewey.amqp.port"))
+                                            (get props "dewey.amqp.user")
+                                            (get props "dewey.amqp.password")
+                                            (get props "dewey.amqp.exchange.name")
+                                            (Boolean. (get props "dewey.amqp.exchange.durable"))
+                                            (Boolean. (get props "dewey.amqp.exchange.auto-delete"))
+                                            (partial curation/consume-msg irods-cfg)
+                                            "data-object.#"
+                                            "collection.#")
+                    (log/info "Attached to the AMQP broker.")
+                    true
+                    (catch Exception e
+                      (log/debug e)
+                      (log/info "Failed to attach to the AMQP broker. Retrying...")
+                      false))]
+    (when-not attached?
+      (Thread/sleep 1000)
+      (recur props irods-cfg))))
 
 
 (defn- update-props
