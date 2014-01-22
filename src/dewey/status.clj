@@ -6,10 +6,13 @@
             [cheshire.core :as json]))
 
 (defroutes dewey-status-app
-  (ANY "/" [] (resource :available-media-types ["text/plain"]
-                        :handle-ok "Welcome to Dewey!"))
-  (ANY "/status" [] (resource :available-media-types ["application/json"]
-                           :handle-ok "yo")))
+  (ANY "/" []
+       (resource :available-media-types ["text/plain"]
+                 :handle-ok "Welcome to Dewey!"))
+
+  (ANY "/status" []
+       (resource :available-media-types ["application/json"]
+                 :handle-ok (json/encode {:service "dewey" :status "ok"}))))
 
 (def dewey-handler
   (-> dewey-status-app

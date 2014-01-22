@@ -68,7 +68,7 @@
   [props]
   (.start
    (Thread.
-     (partial status/start-jetty (get props "dewey.status.listen-port")))))
+     (partial status/start-jetty (Integer/parseInt (get props "dewey.status.listen-port"))))))
 
 
 (defn- update-props
@@ -88,9 +88,9 @@
 (defn- run
   [props-loader]
   (let [props (update-props props-loader (Properties.))]
-    (init-es props)
-    (listen props (init-irods props))
-    (listen-for-status props)))
+   (init-es props)
+   (listen-for-status props)
+   (listen props (init-irods props))))
 
 
 (defn- parse-args
