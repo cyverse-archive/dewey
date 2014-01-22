@@ -62,7 +62,11 @@
      It will throw an exception if it fails to connect to the AMQP broker, setup the exchange, or
      setup the queue."
   [host port user password exchange-name exchange-durable exchange-auto-delete consumer-fn & topics]
-  (consume (rmq/connect {:host host :port port :username user :password password})
+  (consume (rmq/connect {:host                  host
+                         :port                  port
+                         :username              user
+                         :password              password
+                         :automatically-recover true})
            exchange-name
            exchange-durable
            exchange-auto-delete
