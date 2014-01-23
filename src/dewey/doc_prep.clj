@@ -83,6 +83,7 @@
      file-type - The media type of the file."
   [id acl creator date-created date-modified metadata file-size file-type]
   {:id              id
+   :path            id
    :label           (file/basename id)
    :userPermissions (format-acl acl)
    :creator         (format-user creator)
@@ -105,6 +106,7 @@
      metadata - A list of AVU triples in the form produced by the clj-jargon library."
   [id acl creator date-created date-modified metadata]
   {:id              id
+   :path            id
    :label           (file/basename id)
    :userPermissions (format-acl acl)
    :creator         (format-user creator)
