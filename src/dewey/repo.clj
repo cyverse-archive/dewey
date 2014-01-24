@@ -256,7 +256,13 @@
 
      Throws:
        This method can throw an exception if the connection to the data store is lost or the entity
-       is not in the data store."))
+       is not in the data store.")
+
+  (zone [_]
+    "Retrieves the authentication zone.
+
+     Returns:
+       It returns the name of the authentication zone."))
 
 
 (defrecord ^{:private true} IRODS [ctx]
@@ -271,7 +277,8 @@
   (exists? [_ path] (r-info/exists? ctx path))
   (data-objects-in [_ path] (r-lazy/list-files-in ctx path))
   (collections-in [_ path] (r-lazy/list-subdirs-in ctx path))
-  (metadata [_ entity] (get-metadata ctx entity)))
+  (metadata [_ entity] (get-metadata ctx entity))
+  (zone [_] (:zone ctx)))
 
 
 (defn do-with-irods

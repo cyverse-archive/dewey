@@ -7,13 +7,34 @@
             [dewey.indexing :as indexing]
             [dewey.repo :as repo]
             [dewey.util :as util])
-  (:import [org.irods.jargon.core.exception FileNotFoundException]))
+  (:import [org.irods.jargon.core.exception FileNotFoundException]
+           [org.irods.jargon.core.query CollectionAndDataObjectListingEntry]))
+
+
+(defmulti ^{:private true} indexable? #(type %2))
+
+(defmethod indexable? String
+  [irods path]
+  (let [base       (file/path-join "/" (.zone irods))
+        home       (file/path-join base "home")
+        trash      (file/path-join base "trash")
+        home-trash (file/path-join trash "home")]
+    (and (not= base path)
+         (not= home path)
+         (not= trash path)
+         (not= home-trash path)
+         (not= home (file/dirname path))
+         (not= home-trash (file/dirname path)))))
+
+(defmethod indexable? CollectionAndDataObjectListingEntry
+  [irods entry]
+  (indexable? irods (.getFormattedAbsolutePath entry)))
 
 
 (defn- update-parent-modify-time
   [irods entity-path]
   (let [parent-path (util/get-parent-path entity-path)]
-    (when (.exists? irods parent-path)
+    (when (and (indexable? irods parent-path) (.exists? irods parent-path))
       (if (indexing/entity-indexed? :collection parent-path)
         (indexing/update-collection-modify-time irods parent-path)
         (indexing/index-collection irods parent-path)))))
@@ -22,7 +43,8 @@
 (defn- rename-entry
   [irods entity-type old-path new-path index-entity]
   (indexing/remove-entity entity-type old-path)
-  (index-entity irods new-path)
+  (when (indexable? irods new-path)
+    (index-entity irods new-path))
   (update-parent-modify-time irods old-path)
   (when-not (= (util/get-parent-path old-path) (util/get-parent-path new-path))
     (update-parent-modify-time irods new-path)))
@@ -65,7 +87,8 @@
 
 (defn- update-collection-acl
   [irods coll]
-  (update-acl irods :collection coll indexing/index-collection))
+  (when (indexable? irods coll)
+    (update-acl irods :collection coll indexing/index-collection)))
 
 
 (defn- update-data-object-acl
@@ -75,8 +98,10 @@
 
 (defn- index-collection-handler
   [irods msg]
-  (indexing/index-collection irods (:entity msg))
-  (update-parent-modify-time irods (:entity msg)))
+  (let [collection (:entity msg)]
+    (when (indexable? irods collection)
+      (indexing/index-collection irods collection))
+    (update-parent-modify-time irods collection)))
 
 
 (defn- index-data-object-handler
@@ -90,12 +115,14 @@
 
 (defn- reindex-collection-metadata-handler
   [irods msg]
-  (reindex-collection-metadata irods (:entity msg)))
+  (when (indexable? irods (:entity msg))
+    (reindex-collection-metadata irods (:entity msg))))
 
 
 (defn- reinidex-coll-dest-metadata-handler
   [irods msg]
-  (reindex-collection-metadata irods (:destination msg)))
+  (when (indexable? irods (:destination msg))
+    (reindex-collection-metadata irods (:destination msg))))
 
 
 (defn- reindex-data-object-handler
@@ -132,8 +159,11 @@
   (let [old-path (:entity msg)
         new-path (:new-path msg)]
     (rename-entry irods :collection old-path new-path indexing/index-collection)
-    (indexing/remove-entities-like (str old-path "/*"))
-    (crawl-collection irods new-path indexing/index-collection indexing/index-data-object)))
+    (indexing/remove-entities-like (file/path-join old-path "*"))
+    (crawl-collection irods
+                      new-path
+                      #(when (indexable? %1 %2) (indexing/index-collection %1 %2))
+                      indexing/index-data-object)))
 
 
 (defn- rename-data-object-handler
