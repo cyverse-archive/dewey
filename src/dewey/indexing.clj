@@ -115,7 +115,7 @@
    Throws:
      This function can throw an exception if it can't connect to elasticsearch."
   [path-glob]
-  (es-doc/delete-by-query-across-all-types index (es-query/wildcard :id path-glob)))
+  (es-doc/delete-by-query-across-all-types index (es-query/wildcard :path path-glob)))
 
 
 ; XXX - I wish I could think of a way to cleanly and simply separate out the document update logic
