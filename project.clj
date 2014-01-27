@@ -8,7 +8,6 @@
                  [org.clojure/tools.cli "0.2.4"]
                  [org.clojure/tools.logging "0.2.6"]
                  [cheshire "5.2.0"]
-                 [clj-time "0.6.0"]
                  [clojurewerkz/elastisch "1.3.0"]
                  [com.novemberain/langohr "2.2.1"]
                  [liberator "0.10.0"]

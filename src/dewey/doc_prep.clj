@@ -1,8 +1,6 @@
 (ns dewey.doc-prep
   "This is the index entry preparation logic."
-  (:require [clj-time.coerce :as t-conv]
-            [clj-time.format :as t-fmt]
-            [clj-jargon.permissions :as irods]
+  (:require [clj-jargon.permissions :as irods]
             [clojure-commons.file-utils :as file])
   (:import [java.util Date]))
 
@@ -39,19 +37,16 @@
 
 
 (defmulti
-  ^{:doc "Formats a time for indexing. The resulting form will be DATE-HOUR-MINUTE-SECOND-MS."}
+  ^{:doc "Formats a time for indexing. The resulting form will be in milliseconds since epoch."}
   format-time type)
 
 (defmethod format-time String
   [posix-time-ms]
-  (->> posix-time-ms
-    Long/parseLong
-    t-conv/from-long
-    (t-fmt/unparse (t-fmt/formatters :date-hour-minute-second-ms))))
+  (Long/parseLong posix-time-ms))
 
 (defmethod format-time Date
   [time]
-  (t-fmt/unparse (t-fmt/formatters :date-hour-minute-second-ms) (t-conv/from-date time)))
+  (.getTime time))
 
 
 (defn format-metadata
