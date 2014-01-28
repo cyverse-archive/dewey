@@ -21,6 +21,16 @@ $ sudo yum install dewey
 $ sudo /sbin/service dewey start
 ```
 
+Status Endpoint
+---------------
+
+Dewey has an extremely basic status endpoint. It's only real purpose right now is to confirm that Dewey is up and running. You can perform a GET request against the /status endpoint. Here's an example with curl:
+
+    > curl http://not-a-real-dewey-host.org:5555/status
+    {"status":"ok","service":"dewey"}
+    
+The port that dewey listens for status requests on is configurable with the 'dewey.status.listen-port' setting.
+
 License
 -------
 
