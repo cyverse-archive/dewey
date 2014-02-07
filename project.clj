@@ -1,7 +1,14 @@
-(defproject dewey "0.1-SNAPSHOT"
+(defproject org.iplantc/dewey "0.2-SNAPSHOT"
   :description "This is a RabbitMQ client responsible for keeping an elasticsearch index
                 synchronized with an iRODS repository using messages produced by iRODS."
-  :license {:url "file://LICENSE.txt"}
+  :license {:name "BSD"
+            :url "http://iplantcollaborative.org/sites/default/files/iPLANT-LICENSE.txt"}
+  :scm {:connection "scm:git:git@github.com:iPlantCollaborativeOpenSource/dewey.git"
+        :developerConnection "scm:git:git@github.com:iPlantCollaborativeOpenSource/dewey.git"
+        :url "git@github.com:iPlantCollaborativeOpenSource/dewey.git"}
+  :pom-addition [:developers
+                 [:developer
+                  [:url "https://github.com/orgs/iPlantCollaborativeOpenSource/teams/iplant-devs"]]]
   :aot [dewey.core]
   :main dewey.core
   :dependencies [[org.clojure/clojure "1.5.1"]
@@ -25,5 +32,7 @@
                :dependencies ["iplant-service-config >= 0.1.0-5" "iplant-clavin"]
                :config-files ["log4j.properties"]
                :config-path  "resources"}
-  :repositories {"iplantCollaborative"
-                 "http://projects.iplantcollaborative.org/archiva/repository/internal/"})
+  :repositories [["sonatype-nexus-snapshots"
+                  {:url "https://oss.sonatype.org/content/repositories/snapshots"}]]
+  :deploy-repositories [["sonatype-nexus-staging"
+                         {:url "https://oss.sonatype.org/service/local/staging/deploy/maven2/"}]])
