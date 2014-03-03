@@ -56,7 +56,7 @@
                     (log/info "Attached to the AMQP broker.")
                     true
                     (catch Exception e
-                      (log/debug e)
+                      (log/debug (str e))
                       (log/info "Failed to attach to the AMQP broker. Retrying...")
                       false))]
     (when-not attached?
