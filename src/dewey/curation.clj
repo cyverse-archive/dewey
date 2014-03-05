@@ -31,12 +31,24 @@
   (indexable? irods (.getFormattedAbsolutePath entry)))
 
 
+(defn- update-or-remove
+  [entity-type entity updater]
+  (log/trace "(update-or-remove" entity-type entity "<updater>)")
+  (try
+    (updater entity)
+    (catch FileNotFoundException _
+      (indexing/remove-entity entity-type entity)
+      (throw))))
+
+
 (defn- update-parent-modify-time
   [irods entity-path]
   (let [parent-path (util/get-parent-path entity-path)]
     (when (and (indexable? irods parent-path) (.exists? irods parent-path))
       (if (indexing/entity-indexed? :collection parent-path)
-        (indexing/update-collection-modify-time irods parent-path)
+        (update-or-remove :collection
+                          parent-path
+                          (partial indexing/update-collection-modify-time irods))
         (indexing/index-collection irods parent-path)))))
 
 
@@ -64,7 +76,7 @@
 (defn- reindex-metadata
   [irods entity-type path index-entity]
   (if (indexing/entity-indexed? entity-type path)
-    (indexing/update-metadata irods entity-type path)
+    (update-or-remove entity-type path (partial indexing/update-metadata irods entity-type))
     (index-entity irods path)))
 
 
@@ -81,7 +93,7 @@
 (defn- update-acl
   [irods entity-type entity index-entity]
   (if (indexing/entity-indexed? entity-type entity)
-    (indexing/update-acl irods entity-type entity)
+    (update-or-remove entity-type entity (partial indexing/update-acl irods entity-type))
     (index-entity irods entity)))
 
 
@@ -129,7 +141,7 @@
   [irods msg]
   (let [path (:entity msg)]
     (if (indexing/entity-indexed? :data-object path)
-      (indexing/update-data-object irods path (:size msg))
+      (update-or-remove :data-object path #(indexing/update-data-object irods % (:size msg)))
       (indexing/index-data-object irods path
         :file-size (:size msg)
         :file-type (:type msg)))))
@@ -198,12 +210,13 @@
 
 (defn- update-data-object-sys-meta-handler
   [irods msg]
-  (let [path (:entity msg)]
+  (let [path   (:entity msg)
+        update (fn [entity] (indexing/update-data-object irods
+                                                         entity
+                                                         (.data-object-size irods entity)
+                                                         (.data-object-type irods entity)))]
     (if (indexing/entity-indexed? :data-object path)
-      (indexing/update-data-object irods
-                                   path
-                                   (.data-object-size irods path)
-                                   (.data-object-type irods path))
+      (update-or-remove :data-object path update)
       (indexing/index-data-object irods path))))
 
 
@@ -251,7 +264,7 @@
    Throws:
      It throws any exception perculating up from below."
   [irods-cfg routing-key msg]
-  (log/trace "received message:  routing key =" routing-key ", message =" msg)
+  (log/debug "received message:  routing key =" routing-key ", message =" msg)
   (if-let [consume (resolve-consumer routing-key)]
     (try+
       (repo/do-with-irods irods-cfg #(consume % msg))
