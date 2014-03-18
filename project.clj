@@ -1,4 +1,4 @@
-(defproject org.iplantc/dewey "1.8.6-SNAPSHOT"
+(defproject org.iplantc/dewey "1.8.6"
   :description "This is a RabbitMQ client responsible for keeping an elasticsearch index
                 synchronized with an iRODS repository using messages produced by iRODS."
   :url "http://www.iplantcollaborative.org"
